@@ -368,8 +368,9 @@ def label_cell(cell, text, bg="F5F5F5"):
     for p in cell.paragraphs: style_p(p, 10, True, WD_ALIGN_PARAGRAPH.CENTER)
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-def value_cell(cell, text="", center=True, vcenter=True):
+def value_cell(cell, text="", bg="FFFFFF", center=True, vcenter=True):
     text = str(text) if text else ""
+    set_cell_bg(cell, bg)
     if "\n" in text:
         cell.text = ""
         for line in text.split("\n"):
@@ -506,50 +507,102 @@ def gen_comment(student, r_avg, g_avg, sys_prompt, usr_template):
         return "[오류] 코멘트 생성에 실패했습니다. 네트워크 연결을 확인하세요."
 
 def make_report(student, info, r_avg, g_avg, title, logo_bytes):
-    doc = Document(); sec = doc.sections[0]
-    sec.page_width = Cm(21.0); sec.page_height = Cm(29.7)
-    sec.top_margin = sec.bottom_margin = sec.left_margin = sec.right_margin = Cm(1.0)
-    set_page_border(sec); doc.add_paragraph(); add_logo_title(doc, logo_bytes); add_divider(doc)
+    doc = Document()
+    section = doc.sections[0]
+    section.page_width, section.page_height = Cm(21.0), Cm(29.7)
+    section.top_margin, section.bottom_margin = Cm(1.0), Cm(1.0)
+    section.left_margin, section.right_margin = Cm(1.0), Cm(1.0)
 
-    # 학생 정보
-    t = doc.add_table(rows=3, cols=4); t.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i,w in enumerate([3.5,6.0,3.5,6.0]):
-        for row in t.rows: row.cells[i].width = Cm(w)
-    label_cell(t.cell(0,0),"학생명"); value_cell(t.cell(0,1), clean_name(student["학생명"]))
-    label_cell(t.cell(0,2),"담당T");  value_cell(t.cell(0,3), student["담당T"])
-    label_cell(t.cell(1,0),"학교/학년"); value_cell(t.cell(1,1), student.get("학교/학년",""))
-    label_cell(t.cell(1,2),"수업시간");  value_cell(t.cell(1,3), info.get("수업시간",""))
-    label_cell(t.cell(2,0),"시험일자");  value_cell(t.cell(2,1), str(info.get("시험일자","")).split(" ")[0])
-    t.cell(2,2).merge(t.cell(2,3)); set_table_borders(t); no_page_break(t); add_divider(doc)
+    set_page_border(section)
+    doc.add_paragraph()
+    add_logo_title(doc, logo_bytes)
+    add_divider(doc)
 
-    # 시험 결과
-    rt = doc.add_table(rows=4, cols=3); rt.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i,w in enumerate([3.5,7.75,7.75]):
-        for row in rt.rows: row.cells[i].width = Cm(w)
-    rt.cell(0,0).merge(rt.cell(0,2))
-    p = rt.cell(0,0).paragraphs[0]; p.add_run(title).bold = True; p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    label_cell(rt.cell(1,1),"Reading"); label_cell(rt.cell(1,2),"Grammar")
-    label_cell(rt.cell(2,0),"점수"); value_cell(rt.cell(2,1),f"{student['Reading점수']}/100"); value_cell(rt.cell(2,2),f"{student['Grammar점수']}/100")
-    label_cell(rt.cell(3,0),"반평균"); value_cell(rt.cell(3,1),f"{r_avg}/100"); value_cell(rt.cell(3,2),f"{g_avg}/100")
-    set_table_borders(rt); no_page_break(rt)
+    # 학생 정보 테이블
+    info_table = doc.add_table(rows=3, cols=4)
+    info_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for i, w in enumerate([3.5, 6.0, 3.5, 6.0]):
+        for row in info_table.rows:
+            row.cells[i].width = Cm(w)
+    label_cell(info_table.cell(0, 0), "학생명")
+    value_cell(info_table.cell(0, 1), clean_name(student["학생명"]))
+    label_cell(info_table.cell(0, 2), "담당T")
+    value_cell(info_table.cell(0, 3), student["담당T"])
+    label_cell(info_table.cell(1, 0), "학교/학년")
+    value_cell(info_table.cell(1, 1), student.get("학교/학년", ""))
+    label_cell(info_table.cell(1, 2), "수업시간")
+    value_cell(info_table.cell(1, 3), info.get("수업시간", ""))
+    label_cell(info_table.cell(2, 0), "시험일자")
+    value_cell(info_table.cell(2, 1), str(info.get("시험일자", "")).split(" ")[0])
+    info_table.cell(2, 2).merge(info_table.cell(2, 3))
+    set_table_borders(info_table)
+    set_cell_padding(info_table)
+    no_page_break(info_table)
 
-    # 교재 진도
-    pt = doc.add_table(rows=2, cols=4); pt.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i,w in enumerate([3.5,5.16,5.16,5.16]):
-        for row in pt.rows: row.cells[i].width = Cm(w)
-    pt.cell(0,0).merge(pt.cell(1,0)); label_cell(pt.cell(0,0),"현재\n교재 진도")
-    label_cell(pt.cell(0,1),"Reading"); label_cell(pt.cell(0,2),"Grammar"); label_cell(pt.cell(0,3),"Listening")
-    value_cell(pt.cell(1,1), info.get("Reading교재진도","")); value_cell(pt.cell(1,2), info.get("Grammar교재진도",""))
-    value_cell(pt.cell(1,3), info.get("Listening교재진도","")); set_table_borders(pt); no_page_break(pt); add_divider(doc)
+    add_divider(doc)
 
-    # 코멘트
-    ct = doc.add_table(rows=1, cols=2); ct.alignment = WD_TABLE_ALIGNMENT.CENTER
-    ct.rows[0].cells[0].width = Cm(3.5); ct.rows[0].cells[1].width = Cm(15.5)
-    trPr = ct.rows[0]._tr.get_or_add_trPr()
-    h = OxmlElement("w:trHeight"); h.set(qn("w:val"),str(Cm(8.5).twips)); h.set(qn("w:hRule"),"atLeast"); trPr.append(h)
-    label_cell(ct.cell(0,0),"Teacher's\nComment")
-    value_cell(ct.cell(0,1), student.get("코멘트","") or "코멘트가 입력되지 않았습니다.", center=False)
-    set_table_borders(ct); no_page_break(ct)
+    # 시험 결과 테이블
+    result_table = doc.add_table(rows=4, cols=3)
+    result_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for i, w in enumerate([3.5, 7.75, 7.75]):
+        for row in result_table.rows:
+            row.cells[i].width = Cm(w)
+    result_table.cell(0, 0).merge(result_table.cell(0, 2))
+    p = result_table.cell(0, 0).paragraphs[0]
+    p.add_run(title).bold = True
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    label_cell(result_table.cell(1, 1), "Reading")
+    label_cell(result_table.cell(1, 2), "Grammar")
+    label_cell(result_table.cell(2, 0), "점수")
+    value_cell(result_table.cell(2, 1), f"{student['Reading점수']}/100")
+    value_cell(result_table.cell(2, 2), f"{student['Grammar점수']}/100")
+    label_cell(result_table.cell(3, 0), "반평균")
+    value_cell(result_table.cell(3, 1), f"{r_avg}/100")
+    value_cell(result_table.cell(3, 2), f"{g_avg}/100")
+    set_table_borders(result_table)
+    set_cell_padding(result_table)
+    no_page_break(result_table)
+
+    # 교재 진도 테이블
+    progress_table = doc.add_table(rows=2, cols=4)
+    progress_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for i, w in enumerate([3.5, 5.16, 5.16, 5.16]):
+        for row in progress_table.rows:
+            row.cells[i].width = Cm(w)
+    progress_table.cell(0, 0).merge(progress_table.cell(1, 0))
+    label_cell(progress_table.cell(0, 0), "현재\n교재 진도")
+    label_cell(progress_table.cell(0, 1), "Reading")
+    label_cell(progress_table.cell(0, 2), "Grammar")
+    label_cell(progress_table.cell(0, 3), "Listening")
+    value_cell(progress_table.cell(1, 1), info.get("Reading교재진도", ""))
+    value_cell(progress_table.cell(1, 2), info.get("Grammar교재진도", ""))
+    value_cell(progress_table.cell(1, 3), info.get("Listening교재진도", ""))
+    set_table_borders(progress_table)
+    set_cell_padding(progress_table)
+    no_page_break(progress_table)
+
+    add_divider(doc)
+
+    # 코멘트 테이블
+    comment_table = doc.add_table(rows=1, cols=2)
+    comment_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    comment_table.rows[0].cells[0].width = Cm(3.5)
+    comment_table.rows[0].cells[1].width = Cm(15.5)
+    tr = comment_table.rows[0]._tr
+    trPr = tr.get_or_add_trPr()
+    trHeight = OxmlElement("w:trHeight")
+    trHeight.set(qn("w:val"), str(Cm(8.5).twips))
+    trHeight.set(qn("w:hRule"), "atLeast")
+    trPr.append(trHeight)
+    label_cell(comment_table.cell(0, 0), "Teacher's\nComment")
+    final_comment = student.get("코멘트", "")
+    if not final_comment:
+        final_comment = "코멘트가 입력되지 않았습니다."
+    value_cell(comment_table.cell(0, 1), final_comment, center=False)
+    set_table_borders(comment_table)
+    set_cell_padding(comment_table)
+    no_page_break(comment_table)
+
     return doc
 
 def doc_to_bytes(doc):
