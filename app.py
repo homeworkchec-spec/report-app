@@ -91,6 +91,18 @@ def load_api_key():
 
 API_KEY = load_api_key()
 
+@st.cache_data
+def load_cloudconvert_key():
+    try:
+        key = st.secrets.get("CLOUDCONVERT_API_KEY", "")
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.environ.get("CLOUDCONVERT_API_KEY", "")
+
+CC_API_KEY = load_cloudconvert_key()
+
 # 고정 AI 설정
 AI_MODEL = "gpt-5.1"
 AI_TEMPERATURE = 0.7
@@ -796,6 +808,109 @@ def pdf_to_img_bytes(pdf_bytes, dpi=300):
         except Exception:
             return None, "이미지 변환 실패. Poppler 설치를 확인하세요."
 
+def cloudconvert_docx_to_jpg(docx_bytes):
+    """CloudConvert API로 docx → jpg 변환. (None, 에러) 또는 (bytes, None) 반환."""
+    if not CC_API_KEY:
+        return None, "CloudConvert API 키가 설정되지 않았습니다."
+    try:
+        import cloudconvert
+        import requests
+        cloudconvert.configure(api_key=CC_API_KEY, sandbox=False)
+
+        job = cloudconvert.Job.create(payload={
+            'tasks': {
+                'upload': {'operation': 'import/upload'},
+                'convert': {
+                    'operation': 'convert',
+                    'input': 'upload',
+                    'output_format': 'jpg',
+                    'pixel_density': 300,
+                },
+                'export': {
+                    'operation': 'export/url',
+                    'input': 'convert',
+                },
+            }
+        })
+
+        upload_task = None
+        export_task_id = None
+        for task in job['tasks']:
+            if task['operation'] == 'import/upload':
+                upload_task = task
+            elif task['operation'] == 'export/url':
+                export_task_id = task['id']
+
+        cloudconvert.Task.upload(
+            file_name='report.docx',
+            task=upload_task,
+            file=io.BytesIO(docx_bytes),
+        )
+
+        res = cloudconvert.Task.wait(id=export_task_id)
+        files = res.get('result', {}).get('files', [])
+        if not files:
+            return None, "CloudConvert 변환 결과 없음"
+
+        img_url = files[0]['url']
+        resp = requests.get(img_url, timeout=30)
+        if resp.status_code == 200:
+            return resp.content, None
+        return None, f"이미지 다운로드 실패: {resp.status_code}"
+    except Exception as e:
+        return None, f"CloudConvert 변환 실패: {e}"
+
+def cloudconvert_docx_to_pdf(docx_bytes):
+    """CloudConvert API로 docx → pdf 변환."""
+    if not CC_API_KEY:
+        return None, "CloudConvert API 키가 설정되지 않았습니다."
+    try:
+        import cloudconvert
+        import requests
+        cloudconvert.configure(api_key=CC_API_KEY, sandbox=False)
+
+        job = cloudconvert.Job.create(payload={
+            'tasks': {
+                'upload': {'operation': 'import/upload'},
+                'convert': {
+                    'operation': 'convert',
+                    'input': 'upload',
+                    'output_format': 'pdf',
+                },
+                'export': {
+                    'operation': 'export/url',
+                    'input': 'convert',
+                },
+            }
+        })
+
+        upload_task = None
+        export_task_id = None
+        for task in job['tasks']:
+            if task['operation'] == 'import/upload':
+                upload_task = task
+            elif task['operation'] == 'export/url':
+                export_task_id = task['id']
+
+        cloudconvert.Task.upload(
+            file_name='report.docx',
+            task=upload_task,
+            file=io.BytesIO(docx_bytes),
+        )
+
+        res = cloudconvert.Task.wait(id=export_task_id)
+        files = res.get('result', {}).get('files', [])
+        if not files:
+            return None, "CloudConvert 변환 결과 없음"
+
+        pdf_url = files[0]['url']
+        resp = requests.get(pdf_url, timeout=30)
+        if resp.status_code == 200:
+            return resp.content, None
+        return None, f"PDF 다운로드 실패: {resp.status_code}"
+    except Exception as e:
+        return None, f"CloudConvert 변환 실패: {e}"
+
 def make_template_bytes():
     sample_info = {
         "담당T": "홍길동", "수업시간": "월/수 14:00-15:30", "시험일자": "2025-12-19",
@@ -1107,21 +1222,21 @@ with tab3:
                                     if out_docx:
                                         zf.writestr(f"{prefix}/{cn}/{base}.docx", dbytes)
 
-                                    if out_pdf or out_jpg:
-                                        pbytes, pdf_err = docx_to_pdf_bytes(dbytes)
+                                    if out_pdf:
+                                        pbytes, pdf_err = cloudconvert_docx_to_pdf(dbytes)
                                         if pbytes:
-                                            if out_pdf:
-                                                zf.writestr(f"{prefix}/{cn}/{base}.pdf", pbytes)
-                                            if out_jpg:
-                                                ibytes, img_err = pdf_to_img_bytes(pbytes)
-                                                if ibytes:
-                                                    zf.writestr(f"{prefix}/{cn}/{base}.jpg", ibytes)
-                                                else:
-                                                    img_fail += 1
-                                                    errors.append(f"{s['학생명']}: {img_err}")
+                                            zf.writestr(f"{prefix}/{cn}/{base}.pdf", pbytes)
                                         else:
                                             img_fail += 1
                                             errors.append(f"{s['학생명']}: {pdf_err}")
+
+                                    if out_jpg:
+                                        ibytes, img_err = cloudconvert_docx_to_jpg(dbytes)
+                                        if ibytes:
+                                            zf.writestr(f"{prefix}/{cn}/{base}.jpg", ibytes)
+                                        else:
+                                            img_fail += 1
+                                            errors.append(f"{s['학생명']}: {img_err}")
 
                                     done += 1; bar.progress(done/ready, text=f"{done}/{ready}")
                                 except Exception:
