@@ -406,12 +406,22 @@ def set_cell_padding(table, top=70, left=90, bottom=70, right=90):
         cellMar.append(elem)
     tblPr.append(cellMar)
 
+def _set_east_asia_font(run, font_name='맑은 고딕'):
+    """한글(CJK) 폰트를 명시적으로 지정"""
+    rPr = run._element.get_or_add_rPr()
+    rFonts = rPr.find(qn('w:rFonts'))
+    if rFonts is None:
+        rFonts = OxmlElement('w:rFonts')
+        rPr.insert(0, rFonts)
+    rFonts.set(qn('w:eastAsia'), font_name)
+
 def style_paragraph(p, size=10, bold=False, align=None, color="1A1A1A"):
     """단락 스타일 설정"""
     for run in p.runs:
         run.font.size = Pt(size)
         run.font.bold = bold
         run.font.name = '맑은 고딕'
+        _set_east_asia_font(run)
         if color:
             run.font.color.rgb = RGBColor.from_string(color)
 
@@ -519,12 +529,14 @@ def add_logo_and_title(doc, logo_bytes=None):
     title_run1.font.size = Pt(28)
     title_run1.font.bold = True
     title_run1.font.name = '맑은 고딕'
+    _set_east_asia_font(title_run1)
     title_run1.font.color.rgb = RGBColor.from_string("4A5A8C")
 
     title_run2 = title_paragraph.add_run("영어 정기 시험 Report")
     title_run2.font.size = Pt(28)
     title_run2.font.bold = True
     title_run2.font.name = '맑은 고딕'
+    _set_east_asia_font(title_run2)
     title_run2.font.color.rgb = RGBColor.from_string("4A5A8C")
 
     right_cell = title_table.cell(0, 2)
@@ -762,7 +774,7 @@ def docx_to_pdf_bytes(docx_bytes):
                 return f.read(), None
     return None, "PDF 파일이 생성되지 않음"
 
-def pdf_to_img_bytes(pdf_bytes, dpi=200):
+def pdf_to_img_bytes(pdf_bytes, dpi=300):
     """PDF → JPG. 실패 시 (None, 에러메시지) 반환."""
     with tempfile.TemporaryDirectory() as tmp:
         pp = os.path.join(tmp, "report.pdf")
