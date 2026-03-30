@@ -658,6 +658,10 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 학생 정보 테이블
     info_table = doc.add_table(rows=3, cols=4)
     info_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tblW = OxmlElement('w:tblW')
+    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
+    tblW.set(qn('w:type'), 'dxa')
+    info_table._tbl.tblPr.append(tblW)
     widths = [3.5, 6.0, 3.5, 6.0]
     for i, width in enumerate(widths):
         for row in info_table.rows:
@@ -682,6 +686,10 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 시험 결과 테이블
     result_table = doc.add_table(rows=4, cols=3)
     result_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tblW = OxmlElement('w:tblW')
+    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
+    tblW.set(qn('w:type'), 'dxa')
+    result_table._tbl.tblPr.append(tblW)
     widths = [3.5, 7.75, 7.75]
     for i, width in enumerate(widths):
         for row in result_table.rows:
@@ -704,6 +712,10 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 교재 진도 테이블
     progress_table = doc.add_table(rows=2, cols=4)
     progress_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tblW = OxmlElement('w:tblW')
+    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
+    tblW.set(qn('w:type'), 'dxa')
+    progress_table._tbl.tblPr.append(tblW)
     widths = [3.5, 5.16, 5.16, 5.16]
     for i, width in enumerate(widths):
         for row in progress_table.rows:
@@ -724,6 +736,13 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 코멘트 테이블
     comment_table = doc.add_table(rows=1, cols=2)
     comment_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    # 테이블 전체 너비를 19.0cm로 고정 (위 테이블과 정렬)
+    tbl_comment = comment_table._tbl
+    tblPr_comment = tbl_comment.tblPr
+    tblW = OxmlElement('w:tblW')
+    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
+    tblW.set(qn('w:type'), 'dxa')
+    tblPr_comment.append(tblW)
     comment_table.rows[0].cells[0].width = Cm(3.5)
     comment_table.rows[0].cells[1].width = Cm(15.5)
     tr = comment_table.rows[0]._tr
