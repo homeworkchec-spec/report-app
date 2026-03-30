@@ -368,9 +368,8 @@ def label_cell(cell, text, bg="F5F5F5"):
     for p in cell.paragraphs: style_p(p, 10, True, WD_ALIGN_PARAGRAPH.CENTER)
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-def value_cell(cell, text="", bg="FFFFFF", center=True, vcenter=True):
+def value_cell(cell, text="", center=True, vcenter=True):
     text = str(text) if text else ""
-    set_cell_bg(cell, bg)
     if "\n" in text:
         cell.text = ""
         for line in text.split("\n"):
@@ -383,7 +382,7 @@ def value_cell(cell, text="", bg="FFFFFF", center=True, vcenter=True):
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER if vcenter else WD_ALIGN_VERTICAL.TOP
 
 def add_divider(doc, color="4A5A8C", height=60):
-    doc.add_paragraph().space_before = Pt(6)
+    p = doc.add_paragraph(); p.space_before = Pt(6); p.space_after = Pt(6)
     dt = doc.add_table(rows=1, cols=1); dt.alignment = WD_TABLE_ALIGNMENT.CENTER
     c = dt.cell(0,0); c.width = Cm(19.0); c.text = ""; set_cell_bg(c, color)
     for el in dt._tbl.tblPr.xpath("./w:tblBorders"): dt._tbl.tblPr.remove(el)
@@ -536,7 +535,6 @@ def make_report(student, info, r_avg, g_avg, title, logo_bytes):
     value_cell(info_table.cell(2, 1), str(info.get("시험일자", "")).split(" ")[0])
     info_table.cell(2, 2).merge(info_table.cell(2, 3))
     set_table_borders(info_table)
-    set_cell_padding(info_table)
     no_page_break(info_table)
 
     add_divider(doc)
@@ -560,7 +558,6 @@ def make_report(student, info, r_avg, g_avg, title, logo_bytes):
     value_cell(result_table.cell(3, 1), f"{r_avg}/100")
     value_cell(result_table.cell(3, 2), f"{g_avg}/100")
     set_table_borders(result_table)
-    set_cell_padding(result_table)
     no_page_break(result_table)
 
     # 교재 진도 테이블
@@ -578,7 +575,6 @@ def make_report(student, info, r_avg, g_avg, title, logo_bytes):
     value_cell(progress_table.cell(1, 2), info.get("Grammar교재진도", ""))
     value_cell(progress_table.cell(1, 3), info.get("Listening교재진도", ""))
     set_table_borders(progress_table)
-    set_cell_padding(progress_table)
     no_page_break(progress_table)
 
     add_divider(doc)
@@ -600,7 +596,6 @@ def make_report(student, info, r_avg, g_avg, title, logo_bytes):
         final_comment = "코멘트가 입력되지 않았습니다."
     value_cell(comment_table.cell(0, 1), final_comment, center=False)
     set_table_borders(comment_table)
-    set_cell_padding(comment_table)
     no_page_break(comment_table)
 
     return doc
