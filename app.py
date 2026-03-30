@@ -27,6 +27,19 @@ import openai
 
 
 # ════════════════════════════════════════════════════════════
+# 0. FONT INSTALL (Linux 환경에서 맑은 고딕 설치)
+# ════════════════════════════════════════════════════════════
+if platform.system() != "Windows":
+    _font_dir = Path(__file__).parent / ".fonts"
+    _sys_font_dir = Path.home() / ".fonts"
+    if _font_dir.exists() and not (_sys_font_dir / "malgun.ttf").exists():
+        _sys_font_dir.mkdir(exist_ok=True)
+        import shutil
+        for f in _font_dir.glob("*.ttf"):
+            shutil.copy2(f, _sys_font_dir / f.name)
+        subprocess.run(["fc-cache", "-fv"], capture_output=True)
+
+# ════════════════════════════════════════════════════════════
 # 1. PAGE CONFIG
 # ════════════════════════════════════════════════════════════
 st.set_page_config(
