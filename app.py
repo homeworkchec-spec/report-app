@@ -676,10 +676,14 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     info_table = doc.add_table(rows=3, cols=4)
     info_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     fix_table_width(info_table)
+    info_table.cell(2, 2).merge(info_table.cell(2, 3))
     widths = [3.5, 6.0, 3.5, 6.0]
     for i, width in enumerate(widths):
-        for row in info_table.rows:
+        for row in info_table.rows[:2]:
             row.cells[i].width = Cm(width)
+    info_table.rows[2].cells[0].width = Cm(3.5)
+    info_table.rows[2].cells[1].width = Cm(6.0)
+    info_table.rows[2].cells[2].width = Cm(9.5)
     add_label_cell(info_table.cell(0, 0), "학생명")
     display_name = remove_trailing_numbers(student_data['학생명'])
     add_value_cell(info_table.cell(0, 1), display_name, vertical_center=True)
@@ -691,7 +695,6 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     add_value_cell(info_table.cell(1, 3), basic_info.get('수업시간', ''), vertical_center=True)
     add_label_cell(info_table.cell(2, 0), "시험일자")
     add_value_cell(info_table.cell(2, 1), str(basic_info.get('시험일자', '')).split(' ')[0], vertical_center=True)
-    info_table.cell(2, 2).merge(info_table.cell(2, 3))
     set_table_borders(info_table)
     prevent_table_page_break(info_table)
 
@@ -701,11 +704,11 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     result_table = doc.add_table(rows=4, cols=3)
     result_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     fix_table_width(result_table)
+    result_table.cell(0, 0).merge(result_table.cell(0, 2))
     widths = [3.5, 7.75, 7.75]
     for i, width in enumerate(widths):
-        for row in result_table.rows:
+        for row in result_table.rows[1:]:
             row.cells[i].width = Cm(width)
-    result_table.cell(0, 0).merge(result_table.cell(0, 2))
     p = result_table.cell(0, 0).paragraphs[0]
     p.add_run(test_title).bold = True
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -727,7 +730,8 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     widths = [3.5, 5.16, 5.16, 5.16]
     for i, width in enumerate(widths):
         for row in progress_table.rows:
-            row.cells[i].width = Cm(width)
+            if i < len(row.cells):
+                row.cells[i].width = Cm(width)
     progress_table.cell(0, 0).merge(progress_table.cell(1, 0))
     add_label_cell(progress_table.cell(0, 0), "현재\n교재 진도")
     add_label_cell(progress_table.cell(0, 1), "Reading")
