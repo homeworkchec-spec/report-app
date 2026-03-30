@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.txt
+env.txt
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Output folders
+*_정기테스트_보고서_*/
+*.zip
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
