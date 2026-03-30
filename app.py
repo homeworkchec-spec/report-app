@@ -314,108 +314,220 @@ for key, default in [
 
 
 # ════════════════════════════════════════════════════════════
-# 6. DOCUMENT UTILITIES
+# 6. DOCUMENT UTILITIES (원본 정기테스트_보고서_코드_최종.py 그대로)
 # ════════════════════════════════════════════════════════════
 def set_table_borders(table, color="E8E8E8", size=3, inside=True, inside_color="E8E8E8", inside_size=3):
-    tbl = table._tbl; tblPr = tbl.tblPr
-    for el in tblPr.xpath("./w:tblBorders"): tblPr.remove(el)
-    borders = OxmlElement("w:tblBorders")
-    def _b(tag, c, s):
+    """테이블 테두리 설정"""
+    tbl = table._tbl
+    tblPr = tbl.tblPr
+
+    for el in tblPr.xpath("./w:tblBorders"):
+        tblPr.remove(el)
+    borders = OxmlElement('w:tblBorders')
+
+    def make_border(tag, border_color, size_val):
         e = OxmlElement(tag)
-        e.set(qn("w:val"), "single"); e.set(qn("w:sz"), str(s)); e.set(qn("w:color"), c)
+        e.set(qn('w:val'), 'single')
+        e.set(qn('w:sz'), str(size_val))
+        e.set(qn('w:color'), border_color)
         return e
-    for side in ["top","left","bottom","right"]: borders.append(_b(f"w:{side}", color, size))
+
+    borders.append(make_border('w:top', color, size))
+    borders.append(make_border('w:left', color, size))
+    borders.append(make_border('w:bottom', color, size))
+    borders.append(make_border('w:right', color, size))
+
     if inside:
-        borders.append(_b("w:insideH", inside_color, inside_size))
-        borders.append(_b("w:insideV", inside_color, inside_size))
+        borders.append(make_border('w:insideH', inside_color, inside_size))
+        borders.append(make_border('w:insideV', inside_color, inside_size))
+
     tblPr.append(borders)
 
 def set_page_border(section, color="4A5A8C", size=24):
+    """페이지 전체 테두리 설정"""
     sectPr = section._sectPr
-    for b in sectPr.xpath(".//w:pgBorders"): sectPr.remove(b)
-    pgB = OxmlElement("w:pgBorders"); pgB.set(qn("w:offsetFrom"), "page")
-    for side in ["top","left","bottom","right"]:
-        b = OxmlElement(f"w:{side}")
-        for attr, val in [("val","single"),("sz",str(size)),("color",color),("space","0")]:
-            b.set(qn(f"w:{attr}"), val)
-        pgB.append(b)
-    sectPr.append(pgB)
 
-def set_cell_bg(cell, color="F0F0F0"):
-    tcPr = cell._tc.get_or_add_tcPr()
-    for s in tcPr.xpath("./w:shd"): tcPr.remove(s)
-    shd = OxmlElement("w:shd")
-    shd.set(qn("w:val"),"clear"); shd.set(qn("w:color"),"auto"); shd.set(qn("w:fill"),color)
+    for border in sectPr.xpath(".//w:pgBorders"):
+        sectPr.remove(border)
+
+    pgBorders = OxmlElement('w:pgBorders')
+    pgBorders.set(qn('w:offsetFrom'), 'page')
+
+    for side in ['top', 'left', 'bottom', 'right']:
+        border = OxmlElement(f'w:{side}')
+        border.set(qn('w:val'), 'single')
+        border.set(qn('w:sz'), str(size))
+        border.set(qn('w:color'), color)
+        border.set(qn('w:space'), '0')
+        pgBorders.append(border)
+
+    sectPr.append(pgBorders)
+
+def set_cell_background(cell, color="F0F0F0"):
+    """셀 배경색 설정"""
+    cell_elem = cell._tc
+    tcPr = cell_elem.get_or_add_tcPr()
+
+    for shd in tcPr.xpath("./w:shd"):
+        tcPr.remove(shd)
+
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), color)
     tcPr.append(shd)
 
 def set_cell_padding(table, top=70, left=90, bottom=70, right=90):
-    tblPr = table._tbl.tblPr
-    for el in tblPr.xpath("./w:tblCellMar"): tblPr.remove(el)
-    cm = OxmlElement("w:tblCellMar")
-    for side, val in [("top",top),("left",left),("bottom",bottom),("right",right)]:
-        e = OxmlElement("w:"+side); e.set(qn("w:w"),str(val)); e.set(qn("w:type"),"dxa"); cm.append(e)
-    tblPr.append(cm)
+    """셀 패딩 설정"""
+    tbl = table._tbl
+    tblPr = tbl.tblPr
 
-def style_p(p, size=10, bold=False, align=None, color="1A1A1A"):
-    for r in p.runs:
-        r.font.size = Pt(size); r.font.bold = bold; r.font.name = "맑은 고딕"
-        if color: r.font.color.rgb = RGBColor.from_string(color)
-    if align: p.alignment = align
-    p.space_before = Pt(0); p.space_after = Pt(0); p.paragraph_format.line_spacing = 1.0
+    for el in tblPr.xpath("./w:tblCellMar"):
+        tblPr.remove(el)
+    cellMar = OxmlElement('w:tblCellMar')
 
-def label_cell(cell, text, bg="F5F5F5"):
-    cell.text = text; set_cell_bg(cell, bg)
-    for p in cell.paragraphs: style_p(p, 10, True, WD_ALIGN_PARAGRAPH.CENTER)
+    for side, val in [('top',top), ('left',left), ('bottom',bottom), ('right',right)]:
+        elem = OxmlElement('w:'+side)
+        elem.set(qn('w:w'), str(val))
+        elem.set(qn('w:type'), 'dxa')
+        cellMar.append(elem)
+    tblPr.append(cellMar)
+
+def style_paragraph(p, size=10, bold=False, align=None, color="1A1A1A"):
+    """단락 스타일 설정"""
+    for run in p.runs:
+        run.font.size = Pt(size)
+        run.font.bold = bold
+        run.font.name = '맑은 고딕'
+        if color:
+            run.font.color.rgb = RGBColor.from_string(color)
+
+    if align:
+        p.alignment = align
+    p.space_before = Pt(0)
+    p.space_after = Pt(0)
+    p.paragraph_format.line_spacing = 1.0
+
+def add_label_cell(cell, text, bg_color="F5F5F5"):
+    """라벨 셀 추가 (세로 가운데 정렬)"""
+    cell.text = text
+    set_cell_background(cell, bg_color)
+    for p in cell.paragraphs:
+        style_paragraph(p, size=10, bold=True, color="1A1A1A")
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
-def value_cell(cell, text="", center=True, vcenter=True):
-    text = str(text) if text else ""
-    if "\n" in text:
+def add_value_cell(cell, text="", bg_color="FFFFFF", align_center=True, vertical_center=True):
+    """값 셀 추가"""
+    if text is None:
+        text = ""
+    else:
+        text = str(text)
+
+    if '\n' in text:
         cell.text = ""
-        for line in text.split("\n"):
+        for line in text.split('\n'):
             p = cell.add_paragraph(line)
-            style_p(p, 10, False, WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT)
+            style_paragraph(
+                p, size=10, bold=False, color="1A1A1A",
+                align=WD_ALIGN_PARAGRAPH.LEFT if not align_center else WD_ALIGN_PARAGRAPH.CENTER
+            )
     else:
         cell.text = text
         for p in cell.paragraphs:
-            style_p(p, 10, False, WD_ALIGN_PARAGRAPH.CENTER if center else WD_ALIGN_PARAGRAPH.LEFT)
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER if vcenter else WD_ALIGN_VERTICAL.TOP
+            style_paragraph(
+                p, size=10, bold=False, color="1A1A1A",
+                align=WD_ALIGN_PARAGRAPH.LEFT if not align_center else WD_ALIGN_PARAGRAPH.CENTER
+            )
 
-def add_divider(doc, color="4A5A8C", height=60):
-    p = doc.add_paragraph(); p.space_before = Pt(6); p.space_after = Pt(6)
-    dt = doc.add_table(rows=1, cols=1); dt.alignment = WD_TABLE_ALIGNMENT.CENTER
-    c = dt.cell(0,0); c.width = Cm(19.0); c.text = ""; set_cell_bg(c, color)
-    for el in dt._tbl.tblPr.xpath("./w:tblBorders"): dt._tbl.tblPr.remove(el)
-    trPr = dt.rows[0]._tr.get_or_add_trPr()
-    h = OxmlElement("w:trHeight"); h.set(qn("w:val"),str(height)); h.set(qn("w:hRule"),"exact"); trPr.append(h)
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER if vertical_center else WD_ALIGN_VERTICAL.TOP
 
-def add_logo_title(doc, logo_bytes=None):
-    tt = doc.add_table(rows=1, cols=3); tt.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for el in tt._tbl.tblPr.xpath("./w:tblBorders"): tt._tbl.tblPr.remove(el)
-    tt.rows[0].cells[0].width = Cm(4.5); tt.rows[0].cells[1].width = Cm(12.0); tt.rows[0].cells[2].width = Cm(3.0)
-    lc = tt.cell(0,0); lc.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+def add_thick_divider(doc, color="4A5A8C", width_cm=19.0, height=60):
+    """굵은 구분선 추가"""
+    p = doc.add_paragraph()
+    p.space_before = Pt(6)
+    p.space_after = Pt(6)
+
+    divider_table = doc.add_table(rows=1, cols=1)
+    divider_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    divider_cell = divider_table.cell(0, 0)
+    divider_cell.width = Cm(width_cm)
+
+    divider_cell.text = ""
+    set_cell_background(divider_cell, color)
+
+    tbl = divider_table._tbl
+    tblPr = tbl.tblPr
+    for el in tblPr.xpath("./w:tblBorders"):
+        tblPr.remove(el)
+
+    tr = divider_table.rows[0]._tr
+    trPr = tr.get_or_add_trPr()
+    trHeight = OxmlElement('w:trHeight')
+    trHeight.set(qn('w:val'), str(height))
+    trHeight.set(qn('w:hRule'), 'exact')
+    trPr.append(trHeight)
+
+def add_logo_and_title(doc, logo_bytes=None):
+    """로고와 제목 추가"""
+    title_table = doc.add_table(rows=1, cols=3)
+    title_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+    tbl = title_table._tbl
+    tblPr = tbl.tblPr
+    for el in tblPr.xpath("./w:tblBorders"):
+        tblPr.remove(el)
+
+    title_table.rows[0].cells[0].width = Cm(4.5)
+    title_table.rows[0].cells[1].width = Cm(12.0)
+    title_table.rows[0].cells[2].width = Cm(3.0)
+
+    logo_cell = title_table.cell(0, 0)
+    logo_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
     if logo_bytes:
         try:
-            lp = lc.paragraphs[0]; lp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = lp.runs[0] if lp.runs else lp.add_run()
+            logo_paragraph = logo_cell.paragraphs[0]
+            logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = logo_paragraph.runs[0] if logo_paragraph.runs else logo_paragraph.add_run()
             run.add_picture(io.BytesIO(logo_bytes), width=Cm(4.0))
         except Exception:
-            lc.text = ""
+            logo_cell.text = ""
     else:
-        lc.text = ""
-    tc = tt.cell(0,1); tc.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    tp = tc.paragraphs[0]; tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for txt in ["최상위 학원\n", "영어 정기 시험 Report"]:
-        r = tp.add_run(txt); r.font.size = Pt(28); r.font.bold = True
-        r.font.name = "맑은 고딕"; r.font.color.rgb = RGBColor.from_string("4A5A8C")
-    tt.cell(0,2).text = ""
+        logo_cell.text = ""
 
-def no_page_break(table):
+    title_cell = title_table.cell(0, 1)
+    title_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+    title_paragraph = title_cell.paragraphs[0]
+    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    title_run1 = title_paragraph.add_run("최상위 학원\n")
+    title_run1.font.size = Pt(28)
+    title_run1.font.bold = True
+    title_run1.font.name = '맑은 고딕'
+    title_run1.font.color.rgb = RGBColor.from_string("4A5A8C")
+
+    title_run2 = title_paragraph.add_run("영어 정기 시험 Report")
+    title_run2.font.size = Pt(28)
+    title_run2.font.bold = True
+    title_run2.font.name = '맑은 고딕'
+    title_run2.font.color.rgb = RGBColor.from_string("4A5A8C")
+
+    right_cell = title_table.cell(0, 2)
+    right_cell.text = ""
+
+def remove_trailing_numbers(name):
+    """학생 이름 끝에 붙은 숫자 제거"""
+    return re.sub(r'\d+$', '', name).strip()
+
+def prevent_table_page_break(table):
+    """표가 페이지를 넘어가지 않도록 설정"""
     for row in table.rows:
-        trPr = row._tr.get_or_add_trPr(); trPr.append(OxmlElement("w:cantSplit"))
-
-def clean_name(name):
-    return re.sub(r"\d+$", "", name).strip()
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        cant_split = OxmlElement('w:cantSplit')
+        trPr.append(cant_split)
 
 
 # ════════════════════════════════════════════════════════════
@@ -505,7 +617,8 @@ def gen_comment(student, r_avg, g_avg, sys_prompt, usr_template):
     except Exception:
         return "[오류] 코멘트 생성에 실패했습니다. 네트워크 연결을 확인하세요."
 
-def make_report(student, info, r_avg, g_avg, title, logo_bytes):
+def create_individual_report(student_data, basic_info, reading_avg, grammar_avg, logo_bytes, test_title="2025년도 2차 정기테스트 결과"):
+    """개별 학생 보고서 생성 (원본 코드 그대로)"""
     doc = Document()
     section = doc.sections[0]
     section.page_width, section.page_height = Cm(21.0), Cm(29.7)
@@ -514,70 +627,74 @@ def make_report(student, info, r_avg, g_avg, title, logo_bytes):
 
     set_page_border(section)
     doc.add_paragraph()
-    add_logo_title(doc, logo_bytes)
-    add_divider(doc)
+    add_logo_and_title(doc, logo_bytes)
+    add_thick_divider(doc)
 
     # 학생 정보 테이블
     info_table = doc.add_table(rows=3, cols=4)
     info_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i, w in enumerate([3.5, 6.0, 3.5, 6.0]):
+    widths = [3.5, 6.0, 3.5, 6.0]
+    for i, width in enumerate(widths):
         for row in info_table.rows:
-            row.cells[i].width = Cm(w)
-    label_cell(info_table.cell(0, 0), "학생명")
-    value_cell(info_table.cell(0, 1), clean_name(student["학생명"]))
-    label_cell(info_table.cell(0, 2), "담당T")
-    value_cell(info_table.cell(0, 3), student["담당T"])
-    label_cell(info_table.cell(1, 0), "학교/학년")
-    value_cell(info_table.cell(1, 1), student.get("학교/학년", ""))
-    label_cell(info_table.cell(1, 2), "수업시간")
-    value_cell(info_table.cell(1, 3), info.get("수업시간", ""))
-    label_cell(info_table.cell(2, 0), "시험일자")
-    value_cell(info_table.cell(2, 1), str(info.get("시험일자", "")).split(" ")[0])
+            row.cells[i].width = Cm(width)
+    add_label_cell(info_table.cell(0, 0), "학생명")
+    display_name = remove_trailing_numbers(student_data['학생명'])
+    add_value_cell(info_table.cell(0, 1), display_name, vertical_center=True)
+    add_label_cell(info_table.cell(0, 2), "담당T")
+    add_value_cell(info_table.cell(0, 3), student_data['담당T'], vertical_center=True)
+    add_label_cell(info_table.cell(1, 0), "학교/학년")
+    add_value_cell(info_table.cell(1, 1), student_data.get('학교/학년', ''), vertical_center=True)
+    add_label_cell(info_table.cell(1, 2), "수업시간")
+    add_value_cell(info_table.cell(1, 3), basic_info.get('수업시간', ''), vertical_center=True)
+    add_label_cell(info_table.cell(2, 0), "시험일자")
+    add_value_cell(info_table.cell(2, 1), str(basic_info.get('시험일자', '')).split(' ')[0], vertical_center=True)
     info_table.cell(2, 2).merge(info_table.cell(2, 3))
     set_table_borders(info_table)
-    no_page_break(info_table)
+    prevent_table_page_break(info_table)
 
-    add_divider(doc)
+    add_thick_divider(doc)
 
     # 시험 결과 테이블
     result_table = doc.add_table(rows=4, cols=3)
     result_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i, w in enumerate([3.5, 7.75, 7.75]):
+    widths = [3.5, 7.75, 7.75]
+    for i, width in enumerate(widths):
         for row in result_table.rows:
-            row.cells[i].width = Cm(w)
+            row.cells[i].width = Cm(width)
     result_table.cell(0, 0).merge(result_table.cell(0, 2))
     p = result_table.cell(0, 0).paragraphs[0]
-    p.add_run(title).bold = True
+    p.add_run(test_title).bold = True
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    label_cell(result_table.cell(1, 1), "Reading")
-    label_cell(result_table.cell(1, 2), "Grammar")
-    label_cell(result_table.cell(2, 0), "점수")
-    value_cell(result_table.cell(2, 1), f"{student['Reading점수']}/100")
-    value_cell(result_table.cell(2, 2), f"{student['Grammar점수']}/100")
-    label_cell(result_table.cell(3, 0), "반평균")
-    value_cell(result_table.cell(3, 1), f"{r_avg}/100")
-    value_cell(result_table.cell(3, 2), f"{g_avg}/100")
+    add_label_cell(result_table.cell(1, 1), "Reading")
+    add_label_cell(result_table.cell(1, 2), "Grammar")
+    add_label_cell(result_table.cell(2, 0), "점수")
+    add_value_cell(result_table.cell(2, 1), f"{student_data['Reading점수']}/100", vertical_center=True)
+    add_value_cell(result_table.cell(2, 2), f"{student_data['Grammar점수']}/100", vertical_center=True)
+    add_label_cell(result_table.cell(3, 0), "반평균")
+    add_value_cell(result_table.cell(3, 1), f"{reading_avg}/100", vertical_center=True)
+    add_value_cell(result_table.cell(3, 2), f"{grammar_avg}/100", vertical_center=True)
     set_table_borders(result_table)
-    no_page_break(result_table)
+    prevent_table_page_break(result_table)
 
     # 교재 진도 테이블
     progress_table = doc.add_table(rows=2, cols=4)
     progress_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i, w in enumerate([3.5, 5.16, 5.16, 5.16]):
+    widths = [3.5, 5.16, 5.16, 5.16]
+    for i, width in enumerate(widths):
         for row in progress_table.rows:
-            row.cells[i].width = Cm(w)
+            row.cells[i].width = Cm(width)
     progress_table.cell(0, 0).merge(progress_table.cell(1, 0))
-    label_cell(progress_table.cell(0, 0), "현재\n교재 진도")
-    label_cell(progress_table.cell(0, 1), "Reading")
-    label_cell(progress_table.cell(0, 2), "Grammar")
-    label_cell(progress_table.cell(0, 3), "Listening")
-    value_cell(progress_table.cell(1, 1), info.get("Reading교재진도", ""))
-    value_cell(progress_table.cell(1, 2), info.get("Grammar교재진도", ""))
-    value_cell(progress_table.cell(1, 3), info.get("Listening교재진도", ""))
+    add_label_cell(progress_table.cell(0, 0), "현재\n교재 진도")
+    add_label_cell(progress_table.cell(0, 1), "Reading")
+    add_label_cell(progress_table.cell(0, 2), "Grammar")
+    add_label_cell(progress_table.cell(0, 3), "Listening")
+    add_value_cell(progress_table.cell(1, 1), basic_info.get('Reading교재진도', ''), vertical_center=True)
+    add_value_cell(progress_table.cell(1, 2), basic_info.get('Grammar교재진도', ''), vertical_center=True)
+    add_value_cell(progress_table.cell(1, 3), basic_info.get('Listening교재진도', ''), vertical_center=True)
     set_table_borders(progress_table)
-    no_page_break(progress_table)
+    prevent_table_page_break(progress_table)
 
-    add_divider(doc)
+    add_thick_divider(doc)
 
     # 코멘트 테이블
     comment_table = doc.add_table(rows=1, cols=2)
@@ -586,17 +703,18 @@ def make_report(student, info, r_avg, g_avg, title, logo_bytes):
     comment_table.rows[0].cells[1].width = Cm(15.5)
     tr = comment_table.rows[0]._tr
     trPr = tr.get_or_add_trPr()
-    trHeight = OxmlElement("w:trHeight")
-    trHeight.set(qn("w:val"), str(Cm(8.5).twips))
-    trHeight.set(qn("w:hRule"), "atLeast")
+    trHeight = OxmlElement('w:trHeight')
+    trHeight.set(qn('w:val'), str(Cm(8.5).twips))
+    trHeight.set(qn('w:hRule'), 'atLeast')
     trPr.append(trHeight)
-    label_cell(comment_table.cell(0, 0), "Teacher's\nComment")
-    final_comment = student.get("코멘트", "")
+    add_label_cell(comment_table.cell(0, 0), "Teacher's\nComment")
+
+    final_comment = student_data.get('코멘트', '')
     if not final_comment:
         final_comment = "코멘트가 입력되지 않았습니다."
-    value_cell(comment_table.cell(0, 1), final_comment, center=False)
+    add_value_cell(comment_table.cell(0, 1), final_comment, align_center=False, vertical_center=True)
     set_table_borders(comment_table)
-    no_page_break(comment_table)
+    prevent_table_page_break(comment_table)
 
     return doc
 
@@ -955,7 +1073,7 @@ with tab3:
                                 if not s.get("코멘트"): continue
                                 try:
                                     status.markdown(f"**{cn}** · {s['학생명']}")
-                                    doc = make_report(s, info, ra, ga, test_title, DEFAULT_LOGO)
+                                    doc = create_individual_report(s, info, ra, ga, DEFAULT_LOGO, test_title)
                                     dbytes = doc_to_bytes(doc)
                                     safe = re.sub(r'[\\/*?:"<>|]', "_", s["학생명"])
                                     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
