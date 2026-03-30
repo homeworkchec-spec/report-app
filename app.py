@@ -471,17 +471,26 @@ def calc_avg(students):
     gs = [s["Grammar점수"] for s in students if s["Grammar점수"] > 0]
     return (round(mean(rs)) if rs else 0), (round(mean(gs)) if gs else 0)
 
+def _sanitize(text, max_len=500):
+    """프롬프트 인젝션 방어: 제어문자 제거, 길이 제한."""
+    if not isinstance(text, str):
+        return ""
+    text = "".join(c for c in text if ord(c) >= 32 or c in "\n\t")
+    return text[:max_len].strip()
+
 def gen_comment(student, r_avg, g_avg, sys_prompt, usr_template):
     try:
         client = openai.OpenAI(api_key=API_KEY)
-        kw = student.get("키워드","").strip()
+        kw = _sanitize(student.get("키워드",""), 100)
         ks = f"\n- 핵심 키워드 (반드시 포함): {kw}" if kw else ""
         kg = '8. "키워드"에 적힌 내용을 반드시 코멘트에 자연스럽게 포함시켜야 합니다.' if kw else ""
         prompt = usr_template.format(
-            student_name=student.get("학생명",""), reading_score=student.get("Reading점수",0),
+            student_name=_sanitize(student.get("학생명",""), 50),
+            reading_score=student.get("Reading점수",0),
             grammar_score=student.get("Grammar점수",0), reading_avg=r_avg, grammar_avg=g_avg,
-            attitude=student.get("수업태도",""), sincerity=student.get("성실성",""),
-            notes=student.get("특이사항",""), keyword_section=ks, keyword_guideline=kg,
+            attitude=_sanitize(student.get("수업태도",""), 100),
+            sincerity=_sanitize(student.get("성실성",""), 100),
+            notes=_sanitize(student.get("특이사항","")), keyword_section=ks, keyword_guideline=kg,
         )
         resp = client.chat.completions.create(
             model=AI_MODEL,
@@ -489,8 +498,12 @@ def gen_comment(student, r_avg, g_avg, sys_prompt, usr_template):
             max_completion_tokens=AI_MAX_TOKENS, temperature=AI_TEMPERATURE,
         )
         return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return f"[오류] {e}"
+    except openai.AuthenticationError:
+        return "[오류] API 키가 유효하지 않습니다."
+    except openai.RateLimitError:
+        return "[오류] API 요청 한도 초과. 잠시 후 다시 시도하세요."
+    except Exception:
+        return "[오류] 코멘트 생성에 실패했습니다. 네트워크 연결을 확인하세요."
 
 def make_report(student, info, r_avg, g_avg, title, logo_bytes):
     doc = Document(); sec = doc.sections[0]
@@ -563,8 +576,8 @@ def docx_to_pdf_bytes(docx_bytes):
                     ["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", tmp, dp],
                     capture_output=True, timeout=60, check=True,
                 )
-        except Exception as e:
-            return None, f"PDF 변환 실패: {e}"
+        except Exception:
+            return None, "PDF 변환 실패. Word/LibreOffice 설치를 확인하세요."
         if os.path.exists(pp):
             with open(pp, "rb") as f:
                 return f.read(), None
@@ -580,7 +593,7 @@ def pdf_to_img_bytes(pdf_bytes, dpi=200):
             from pdf2image import convert_from_path
             kw = {"dpi": dpi, "first_page": 1, "last_page": 1}
             if platform.system() == "Windows":
-                pop = r"C:\Release-25.07.0\poppler-25.07.0\Library\bin"
+                pop = os.environ.get("POPPLER_PATH", r"C:\Release-25.07.0\poppler-25.07.0\Library\bin")
                 if os.path.exists(pop):
                     kw["poppler_path"] = pop
             imgs = convert_from_path(pp, **kw)
@@ -589,8 +602,8 @@ def pdf_to_img_bytes(pdf_bytes, dpi=200):
                 imgs[0].save(buf, "JPEG", quality=95)
                 return buf.getvalue(), None
             return None, "이미지 변환 결과 없음"
-        except Exception as e:
-            return None, f"이미지 변환 실패: {e}"
+        except Exception:
+            return None, "이미지 변환 실패. Poppler 설치를 확인하세요."
 
 def make_template_bytes():
     sample_info = {
@@ -723,12 +736,22 @@ with tab1:
     if uploaded:
         file_key = f"{uploaded.name}_{uploaded.size}"
         if st.session_state._file_key != file_key:
-            fb = uploaded.read()
-            st.session_state._file_key = file_key
-            st.session_state.excel_bytes = fb
-            st.session_state.class_data = parse_excel(fb)
-            st.session_state.comments_generated = False
-            st.session_state.reports_zip = None
+            if uploaded.size > 10 * 1024 * 1024:
+                st.error("파일 크기가 10MB를 초과합니다.")
+            else:
+                fb = uploaded.read()
+                try:
+                    parsed = parse_excel(fb)
+                    if not parsed:
+                        st.error("유효한 반 데이터를 찾을 수 없습니다. 템플릿 형식을 확인하세요.")
+                    else:
+                        st.session_state._file_key = file_key
+                        st.session_state.excel_bytes = fb
+                        st.session_state.class_data = parsed
+                        st.session_state.comments_generated = False
+                        st.session_state.reports_zip = None
+                except Exception:
+                    st.error("엑셀 파일을 읽을 수 없습니다. 파일이 손상되었거나 형식이 다릅니다.")
 
     if st.session_state.class_data:
         cd = st.session_state.class_data
@@ -910,8 +933,8 @@ with tab3:
                                             errors.append(f"{s['학생명']}: {pdf_err}")
 
                                     done += 1; bar.progress(done/ready, text=f"{done}/{ready}")
-                                except Exception as e:
-                                    errors.append(f"{s['학생명']}: {e}")
+                                except Exception:
+                                    errors.append(f"{s['학생명']}: 보고서 생성 실패")
 
                     bar.progress(1.0, text="완료")
                     if errors:
@@ -924,8 +947,8 @@ with tab3:
                     else:
                         status.warning("코멘트가 있는 학생이 없습니다. 먼저 코멘트를 생성하세요.")
                     st.session_state.reports_zip = zbuf.getvalue()
-                except Exception as e:
-                    st.error(f"보고서 생성 중 오류: {e}")
+                except Exception:
+                    st.error("보고서 생성 중 오류가 발생했습니다.")
 
         if st.session_state.reports_zip:
             st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
