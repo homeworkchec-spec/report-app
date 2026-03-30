@@ -812,10 +812,10 @@ def _cc_convert(docx_bytes, output_format, extra_options=None):
     """CloudConvert API로 docx를 지정 형식으로 변환. (bytes, None) 또는 (None, 에러)."""
     if not CC_API_KEY:
         return None, "CloudConvert API 키가 설정되지 않았습니다."
+    tmp_path = None
     try:
         import cloudconvert
         import requests as req
-        import time
 
         cloudconvert.configure(api_key=CC_API_KEY, sandbox=False)
 
@@ -838,23 +838,25 @@ def _cc_convert(docx_bytes, output_format, extra_options=None):
             }
         })
 
-        upload_task = None
+        upload_task_id = None
         export_task_id = None
         for task in job['tasks']:
             if task['operation'] == 'import/upload':
-                upload_task = task
+                upload_task_id = task['id']
             elif task['operation'] == 'export/url':
                 export_task_id = task['id']
+
+        # upload task를 다시 조회해서 form 정보 획득
+        upload_task = cloudconvert.Task.find(id=upload_task_id)
 
         # 임시파일로 저장 후 업로드
         with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
             tmp.write(docx_bytes)
             tmp_path = tmp.name
-        try:
-            cloudconvert.Task.upload(file_name=tmp_path, task=upload_task)
-        finally:
-            os.unlink(tmp_path)
 
+        cloudconvert.Task.upload(file_name=tmp_path, task=upload_task)
+
+        # 완료 대기
         res = cloudconvert.Task.wait(id=export_task_id)
         files = res.get('result', {}).get('files', [])
         if not files:
@@ -866,6 +868,9 @@ def _cc_convert(docx_bytes, output_format, extra_options=None):
         return None, f"다운로드 실패: {resp.status_code}"
     except Exception as e:
         return None, f"CloudConvert 변환 실패: {e}"
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 def cloudconvert_docx_to_jpg(docx_bytes):
     return _cc_convert(docx_bytes, 'jpg', {'pixel_density': 300})
