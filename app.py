@@ -808,24 +808,29 @@ def pdf_to_img_bytes(pdf_bytes, dpi=300):
         except Exception:
             return None, "이미지 변환 실패. Poppler 설치를 확인하세요."
 
-def cloudconvert_docx_to_jpg(docx_bytes):
-    """CloudConvert API로 docx → jpg 변환. (None, 에러) 또는 (bytes, None) 반환."""
+def _cc_convert(docx_bytes, output_format, extra_options=None):
+    """CloudConvert API로 docx를 지정 형식으로 변환. (bytes, None) 또는 (None, 에러)."""
     if not CC_API_KEY:
         return None, "CloudConvert API 키가 설정되지 않았습니다."
     try:
         import cloudconvert
-        import requests
+        import requests as req
+        import time
+
         cloudconvert.configure(api_key=CC_API_KEY, sandbox=False)
+
+        convert_opts = {
+            'operation': 'convert',
+            'input': 'upload',
+            'output_format': output_format,
+        }
+        if extra_options:
+            convert_opts.update(extra_options)
 
         job = cloudconvert.Job.create(payload={
             'tasks': {
                 'upload': {'operation': 'import/upload'},
-                'convert': {
-                    'operation': 'convert',
-                    'input': 'upload',
-                    'output_format': 'jpg',
-                    'pixel_density': 300,
-                },
+                'convert': convert_opts,
                 'export': {
                     'operation': 'export/url',
                     'input': 'convert',
@@ -841,75 +846,32 @@ def cloudconvert_docx_to_jpg(docx_bytes):
             elif task['operation'] == 'export/url':
                 export_task_id = task['id']
 
-        cloudconvert.Task.upload(
-            file_name='report.docx',
-            task=upload_task,
-            file=io.BytesIO(docx_bytes),
-        )
+        # 임시파일로 저장 후 업로드
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
+            tmp.write(docx_bytes)
+            tmp_path = tmp.name
+        try:
+            cloudconvert.Task.upload(file_name=tmp_path, task=upload_task)
+        finally:
+            os.unlink(tmp_path)
 
         res = cloudconvert.Task.wait(id=export_task_id)
         files = res.get('result', {}).get('files', [])
         if not files:
-            return None, "CloudConvert 변환 결과 없음"
+            return None, "변환 결과 없음"
 
-        img_url = files[0]['url']
-        resp = requests.get(img_url, timeout=30)
+        resp = req.get(files[0]['url'], timeout=60)
         if resp.status_code == 200:
             return resp.content, None
-        return None, f"이미지 다운로드 실패: {resp.status_code}"
+        return None, f"다운로드 실패: {resp.status_code}"
     except Exception as e:
         return None, f"CloudConvert 변환 실패: {e}"
+
+def cloudconvert_docx_to_jpg(docx_bytes):
+    return _cc_convert(docx_bytes, 'jpg', {'pixel_density': 300})
 
 def cloudconvert_docx_to_pdf(docx_bytes):
-    """CloudConvert API로 docx → pdf 변환."""
-    if not CC_API_KEY:
-        return None, "CloudConvert API 키가 설정되지 않았습니다."
-    try:
-        import cloudconvert
-        import requests
-        cloudconvert.configure(api_key=CC_API_KEY, sandbox=False)
-
-        job = cloudconvert.Job.create(payload={
-            'tasks': {
-                'upload': {'operation': 'import/upload'},
-                'convert': {
-                    'operation': 'convert',
-                    'input': 'upload',
-                    'output_format': 'pdf',
-                },
-                'export': {
-                    'operation': 'export/url',
-                    'input': 'convert',
-                },
-            }
-        })
-
-        upload_task = None
-        export_task_id = None
-        for task in job['tasks']:
-            if task['operation'] == 'import/upload':
-                upload_task = task
-            elif task['operation'] == 'export/url':
-                export_task_id = task['id']
-
-        cloudconvert.Task.upload(
-            file_name='report.docx',
-            task=upload_task,
-            file=io.BytesIO(docx_bytes),
-        )
-
-        res = cloudconvert.Task.wait(id=export_task_id)
-        files = res.get('result', {}).get('files', [])
-        if not files:
-            return None, "CloudConvert 변환 결과 없음"
-
-        pdf_url = files[0]['url']
-        resp = requests.get(pdf_url, timeout=30)
-        if resp.status_code == 200:
-            return resp.content, None
-        return None, f"PDF 다운로드 실패: {resp.status_code}"
-    except Exception as e:
-        return None, f"CloudConvert 변환 실패: {e}"
+    return _cc_convert(docx_bytes, 'pdf')
 
 def make_template_bytes():
     sample_info = {
@@ -1239,6 +1201,7 @@ with tab3:
                                             errors.append(f"{s['학생명']}: {img_err}")
 
                                     done += 1; bar.progress(done/ready, text=f"{done}/{ready}")
+                                    import time; time.sleep(1)
                                 except Exception:
                                     errors.append(f"{s['학생명']}: 보고서 생성 실패")
 
