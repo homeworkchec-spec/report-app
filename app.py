@@ -526,14 +526,14 @@ def add_logo_and_title(doc, logo_bytes=None):
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     title_run1 = title_paragraph.add_run("최상위 학원\n")
-    title_run1.font.size = Pt(28)
+    title_run1.font.size = Pt(24)
     title_run1.font.bold = True
     title_run1.font.name = '맑은 고딕'
     _set_east_asia_font(title_run1)
     title_run1.font.color.rgb = RGBColor.from_string("4A5A8C")
 
     title_run2 = title_paragraph.add_run("영어 정기 시험 Report")
-    title_run2.font.size = Pt(28)
+    title_run2.font.size = Pt(24)
     title_run2.font.bold = True
     title_run2.font.name = '맑은 고딕'
     _set_east_asia_font(title_run2)
@@ -545,6 +545,23 @@ def add_logo_and_title(doc, logo_bytes=None):
 def remove_trailing_numbers(name):
     """학생 이름 끝에 붙은 숫자 제거"""
     return re.sub(r'\d+$', '', name).strip()
+
+def fix_table_width(table, width_cm=19.0):
+    """테이블 너비 고정 + 레이아웃 fixed (LibreOffice 렌더링 정렬용)"""
+    tblPr = table._tbl.tblPr
+    # 기존 tblW 제거
+    for el in tblPr.xpath("./w:tblW"):
+        tblPr.remove(el)
+    tblW = OxmlElement('w:tblW')
+    tblW.set(qn('w:w'), str(int(Cm(width_cm).twips)))
+    tblW.set(qn('w:type'), 'dxa')
+    tblPr.append(tblW)
+    # 레이아웃을 fixed로 강제
+    for el in tblPr.xpath("./w:tblLayout"):
+        tblPr.remove(el)
+    layout = OxmlElement('w:tblLayout')
+    layout.set(qn('w:type'), 'fixed')
+    tblPr.append(layout)
 
 def prevent_table_page_break(table):
     """표가 페이지를 넘어가지 않도록 설정"""
@@ -658,10 +675,7 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 학생 정보 테이블
     info_table = doc.add_table(rows=3, cols=4)
     info_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    tblW = OxmlElement('w:tblW')
-    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
-    tblW.set(qn('w:type'), 'dxa')
-    info_table._tbl.tblPr.append(tblW)
+    fix_table_width(info_table)
     widths = [3.5, 6.0, 3.5, 6.0]
     for i, width in enumerate(widths):
         for row in info_table.rows:
@@ -686,10 +700,7 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 시험 결과 테이블
     result_table = doc.add_table(rows=4, cols=3)
     result_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    tblW = OxmlElement('w:tblW')
-    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
-    tblW.set(qn('w:type'), 'dxa')
-    result_table._tbl.tblPr.append(tblW)
+    fix_table_width(result_table)
     widths = [3.5, 7.75, 7.75]
     for i, width in enumerate(widths):
         for row in result_table.rows:
@@ -712,10 +723,7 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 교재 진도 테이블
     progress_table = doc.add_table(rows=2, cols=4)
     progress_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    tblW = OxmlElement('w:tblW')
-    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
-    tblW.set(qn('w:type'), 'dxa')
-    progress_table._tbl.tblPr.append(tblW)
+    fix_table_width(progress_table)
     widths = [3.5, 5.16, 5.16, 5.16]
     for i, width in enumerate(widths):
         for row in progress_table.rows:
@@ -736,13 +744,7 @@ def create_individual_report(student_data, basic_info, reading_avg, grammar_avg,
     # 코멘트 테이블
     comment_table = doc.add_table(rows=1, cols=2)
     comment_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    # 테이블 전체 너비를 19.0cm로 고정 (위 테이블과 정렬)
-    tbl_comment = comment_table._tbl
-    tblPr_comment = tbl_comment.tblPr
-    tblW = OxmlElement('w:tblW')
-    tblW.set(qn('w:w'), str(int(Cm(19.0).twips)))
-    tblW.set(qn('w:type'), 'dxa')
-    tblPr_comment.append(tblW)
+    fix_table_width(comment_table)
     comment_table.rows[0].cells[0].width = Cm(3.5)
     comment_table.rows[0].cells[1].width = Cm(15.5)
     tr = comment_table.rows[0]._tr
