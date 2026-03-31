@@ -1087,7 +1087,19 @@ with tab2:
             "부드러운 표현을 고르는 중...",
         ]
 
-        if selected and st.button("코멘트 생성 시작", type="primary", use_container_width=True):
+        col_btn, col_dl = st.columns([1, 1])
+        with col_btn:
+            gen_clicked = st.button("코멘트 생성 시작", type="primary", use_container_width=True)
+        with col_dl:
+            if st.session_state.class_data:
+                st.download_button(
+                    "코멘트 포함 엑셀 다운로드", data=export_excel(st.session_state.class_data),
+                    file_name=f"최상위학원_코멘트완료_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+
+        if gen_clicked and selected:
             total = sum(1 for cn in selected for s in cd[cn]["students"] if not s.get("코멘트"))
             if total == 0:
                 st.info("선택된 반의 모든 학생에게 이미 코멘트가 있습니다.")
@@ -1137,14 +1149,6 @@ with tab2:
                         for col in ["Reading점수","Grammar점수"]:
                             d["students"][idx][col] = int(row[col]) if pd.notna(row[col]) else 0
 
-        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        if st.session_state.class_data:
-            st.download_button(
-                "코멘트 포함 엑셀 다운로드", data=export_excel(st.session_state.class_data),
-                file_name=f"최상위학원_코멘트완료_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
 
 
 # ── Tab 3 ──
