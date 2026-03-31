@@ -1119,20 +1119,23 @@ with tab2:
             d = cd[cn]
             if not d["students"]: continue
             with st.expander(f"{cn}  ({len(d['students'])}명)", expanded=bool(st.session_state.comments_generated)):
-                edf = pd.DataFrame(d["students"])[["학생명","Reading점수","Grammar점수","수업태도","성실성","특이사항","코멘트"]]
+                edf = pd.DataFrame(d["students"])[["학생명","학교/학년","Reading점수","Grammar점수","수업태도","성실성","특이사항","코멘트"]]
                 edited = st.data_editor(edf, column_config={
-                    "학생명": st.column_config.TextColumn("학생명", disabled=True, width="small"),
-                    "Reading점수": st.column_config.NumberColumn("R", disabled=True, width="small"),
-                    "Grammar점수": st.column_config.NumberColumn("G", disabled=True, width="small"),
-                    "수업태도": st.column_config.TextColumn("수업태도", width="small"),
-                    "성실성": st.column_config.TextColumn("성실성", width="small"),
-                    "특이사항": st.column_config.TextColumn("특이사항", width="medium"),
-                    "코멘트": st.column_config.TextColumn("코멘트", width="large"),
+                    "학생명": st.column_config.TextColumn("이름", width=70),
+                    "학교/학년": st.column_config.TextColumn("학교/학년", width=90),
+                    "Reading점수": st.column_config.NumberColumn("R", width=50),
+                    "Grammar점수": st.column_config.NumberColumn("G", width=50),
+                    "수업태도": st.column_config.TextColumn("태도", width=60),
+                    "성실성": st.column_config.TextColumn("성실성", width=60),
+                    "특이사항": st.column_config.TextColumn("특이사항", width=200),
+                    "코멘트": st.column_config.TextColumn("코멘트", width=350),
                 }, use_container_width=True, hide_index=True, key=f"ed_{cn}_v{st.session_state._data_ver}")
                 for idx, row in edited.iterrows():
                     if idx < len(d["students"]):
-                        for col in ["수업태도","성실성","특이사항","코멘트"]:
+                        for col in ["학생명","학교/학년","수업태도","성실성","특이사항","코멘트"]:
                             d["students"][idx][col] = row[col] if pd.notna(row[col]) else ""
+                        for col in ["Reading점수","Grammar점수"]:
+                            d["students"][idx][col] = int(row[col]) if pd.notna(row[col]) else 0
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
         if st.session_state.class_data:
