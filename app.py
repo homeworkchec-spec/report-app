@@ -601,30 +601,23 @@ def prevent_table_page_break(table):
 # ════════════════════════════════════════════════════════════
 # 7. BUSINESS LOGIC
 # ════════════════════════════════════════════════════════════
-def _fix_workbook(file_bytes):
-    """한셀 등 호환 프로그램에서 저장한 엑셀의 스타일 문제 수리."""
-    from openpyxl import load_workbook
-    from openpyxl.styles.named_styles import _NamedCellStyle
-    wb = load_workbook(io.BytesIO(file_bytes))
-    # named_styles에서 name이 None인 것 수리
-    fixed = []
-    for i, style in enumerate(wb._named_styles):
-        if not isinstance(style, _NamedCellStyle):
-            continue
-        if style.name is None:
-            style.name = f"Style_{i}"
-        fixed.append(style)
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+def _patch_openpyxl():
+    """openpyxl의 named_styles 검증을 패치하여 한셀 호환."""
+    try:
+        from openpyxl.styles.named_styles import _NamedCellStyle
+        _orig_init = _NamedCellStyle.__init__
+        def _patched_init(self, **kw):
+            if kw.get('name') is None:
+                kw['name'] = 'Normal'
+            _orig_init(self, **kw)
+        _NamedCellStyle.__init__ = _patched_init
+    except Exception:
+        pass
+
+_patch_openpyxl()
 
 def parse_excel(file_bytes):
     class_data = {}
-    # 항상 먼저 수리 시도 (한셀 호환)
-    try:
-        file_bytes = _fix_workbook(file_bytes)
-    except Exception:
-        pass
     xls = pd.ExcelFile(io.BytesIO(file_bytes))
     sheets = xls.sheet_names
     for cn in ALL_CLASSES:
