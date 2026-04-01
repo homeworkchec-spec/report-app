@@ -1033,8 +1033,8 @@ with tab1:
                         st.session_state.class_data = parsed
                         st.session_state.comments_generated = False
                         st.session_state.reports_zip = None
-                except Exception:
-                    st.error("엑셀 파일을 읽을 수 없습니다. 파일이 손상되었거나 형식이 다릅니다.")
+                except Exception as e:
+                    st.error(f"엑셀 파일을 읽을 수 없습니다: {e}")
 
     if st.session_state.class_data:
         cd = st.session_state.class_data
