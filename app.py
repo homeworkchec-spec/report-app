@@ -601,9 +601,24 @@ def prevent_table_page_break(table):
 # ════════════════════════════════════════════════════════════
 # 7. BUSINESS LOGIC
 # ════════════════════════════════════════════════════════════
+def _fix_workbook(file_bytes):
+    """한셀 등 호환 프로그램에서 저장한 엑셀의 스타일 문제 수리."""
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(file_bytes))
+    for style in list(wb._named_styles):
+        if style.name is None:
+            style.name = "Normal"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
 def parse_excel(file_bytes):
     class_data = {}
-    xls = pd.ExcelFile(io.BytesIO(file_bytes))
+    try:
+        xls = pd.ExcelFile(io.BytesIO(file_bytes))
+    except Exception:
+        file_bytes = _fix_workbook(file_bytes)
+        xls = pd.ExcelFile(io.BytesIO(file_bytes))
     sheets = xls.sheet_names
     for cn in ALL_CLASSES:
         if f"{cn}_반정보" not in sheets or f"{cn}_학생" not in sheets:
