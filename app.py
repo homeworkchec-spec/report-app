@@ -1157,12 +1157,29 @@ with tab2:
         st.markdown("### 데이터 수정 / 코멘트 검수")
         st.caption("수업태도, 성실성, 특이사항을 수정한 뒤 코멘트를 생성하세요. 코멘트도 직접 수정 가능합니다.")
 
+        def _sync_edits(cn_key):
+            """data_editor 수정사항을 즉시 session_state에 반영."""
+            editor_key = f"ed_{cn_key}_v{st.session_state._data_ver}"
+            if editor_key not in st.session_state:
+                return
+            changes = st.session_state[editor_key]
+            d = st.session_state.class_data[cn_key]
+            if "edited_rows" in changes:
+                for row_idx_str, row_changes in changes["edited_rows"].items():
+                    idx = int(row_idx_str)
+                    if idx < len(d["students"]):
+                        for col, val in row_changes.items():
+                            if col in ["Reading점수", "Grammar점수"]:
+                                d["students"][idx][col] = int(val) if val is not None else 0
+                            else:
+                                d["students"][idx][col] = val if val is not None else ""
+
         for cn in avail:
             d = cd[cn]
             if not d["students"]: continue
             with st.expander(f"{cn}  ({len(d['students'])}명)", expanded=bool(st.session_state.comments_generated)):
                 edf = pd.DataFrame(d["students"])[["학생명","학교/학년","Reading점수","Grammar점수","수업태도","성실성","특이사항","코멘트"]]
-                edited = st.data_editor(edf, column_config={
+                st.data_editor(edf, column_config={
                     "학생명": st.column_config.TextColumn("이름", width=70),
                     "학교/학년": st.column_config.TextColumn("학교/학년", width=90),
                     "Reading점수": st.column_config.NumberColumn("R", width=50),
@@ -1171,13 +1188,11 @@ with tab2:
                     "성실성": st.column_config.TextColumn("성실성", width=60),
                     "특이사항": st.column_config.TextColumn("특이사항", width=200),
                     "코멘트": st.column_config.TextColumn("코멘트", width=350),
-                }, use_container_width=True, hide_index=True, key=f"ed_{cn}_v{st.session_state._data_ver}")
-                for idx, row in edited.iterrows():
-                    if idx < len(d["students"]):
-                        for col in ["학생명","학교/학년","수업태도","성실성","특이사항","코멘트"]:
-                            d["students"][idx][col] = row[col] if pd.notna(row[col]) else ""
-                        for col in ["Reading점수","Grammar점수"]:
-                            d["students"][idx][col] = int(row[col]) if pd.notna(row[col]) else 0
+                }, use_container_width=True, hide_index=True,
+                   key=f"ed_{cn}_v{st.session_state._data_ver}",
+                   on_change=_sync_edits, args=(cn,))
+                # 매 리런마다도 sync
+                _sync_edits(cn)
 
 
 
