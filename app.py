@@ -1154,6 +1154,17 @@ with tab2:
                 st.rerun()
 
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        st.markdown("### 반 정보 수정")
+        info_cols = st.columns(min(len(avail), 3))
+        for i, cn in enumerate(avail):
+            with info_cols[i % 3]:
+                d = cd[cn]
+                cur_date = str(d["info"].get("시험일자", "")).split(" ")[0]
+                new_date = st.text_input(f"{cn} 시험일자", value=cur_date, key=f"date_{cn}")
+                if new_date != cur_date:
+                    d["info"]["시험일자"] = new_date
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
         st.markdown("### 데이터 수정 / 코멘트 검수")
         st.caption("수업태도, 성실성, 특이사항을 수정한 뒤 코멘트를 생성하세요. 코멘트도 직접 수정 가능합니다.")
 
