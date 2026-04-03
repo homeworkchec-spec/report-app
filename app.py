@@ -1093,6 +1093,15 @@ with tab2:
         avail = list(cd.keys())
         selected = st.multiselect("코멘트를 생성할 반", avail, default=avail)
 
+        # 특정 학생 선택
+        all_students_t2 = []
+        for cn in selected:
+            for s in cd[cn]["students"]:
+                all_students_t2.append(f"{cn} — {s['학생명']}")
+        pick_students_t2 = st.multiselect(
+            "특정 학생만 선택 (비워두면 전체)", all_students_t2, default=[], key="pick_t2",
+        )
+
         LOADING_MSGS = [
             "학생 관찰일지 읽는 중...",
             "학부모 감동 포인트 계산 중...",
@@ -1114,10 +1123,15 @@ with tab2:
                     use_container_width=True,
                 )
 
+        def _is_picked_t2(cn, name):
+            if not pick_students_t2:
+                return True
+            return f"{cn} — {name}" in pick_students_t2
+
         if gen_clicked and selected:
-            total = sum(1 for cn in selected for s in cd[cn]["students"] if not s.get("코멘트"))
+            total = sum(1 for cn in selected for s in cd[cn]["students"] if not s.get("코멘트") and _is_picked_t2(cn, s["학생명"]))
             if total == 0:
-                st.info("선택된 반의 모든 학생에게 이미 코멘트가 있습니다.")
+                st.info("선택된 학생 중 코멘트가 없는 학생이 없습니다.")
             else:
                 bar = st.progress(0, text="준비 중...")
                 status = st.empty(); fortune_area = st.empty(); done = 0
@@ -1125,6 +1139,7 @@ with tab2:
                     sts = cd[cn]["students"]; ra, ga = calc_avg(sts)
                     for s in sts:
                         if s.get("코멘트"): continue
+                        if not _is_picked_t2(cn, s["학생명"]): continue
                         msg = random.choice(LOADING_MSGS)
                         status.markdown(f"**{cn}** · {s['학생명']} — _{msg}_")
                         fortune_area.caption(f"오늘의 운세 — {random.choice(FORTUNES)}")
@@ -1184,12 +1199,27 @@ with tab3:
             with fc2: out_pdf  = st.checkbox("PDF", value=False)
             with fc3: out_jpg  = st.checkbox("이미지", value=True)
 
+        # 특정 학생 선택
+        all_students_t3 = []
+        for cn in rpt_classes:
+            for s in cd[cn]["students"]:
+                if s.get("코멘트"):
+                    all_students_t3.append(f"{cn} — {s['학생명']}")
+        pick_students_t3 = st.multiselect(
+            "특정 학생만 선택 (비워두면 전체)", all_students_t3, default=[], key="pick_t3",
+        )
+
+        def _is_picked_t3(cn, name):
+            if not pick_students_t3:
+                return True
+            return f"{cn} — {name}" in pick_students_t3
+
         # 준비 상태 확인
         ready = 0; missing = []
         for cn in rpt_classes:
             for s in cd[cn]["students"]:
-                if s.get("코멘트"): ready += 1
-                else: missing.append(f"{cn} — {s['학생명']}")
+                if s.get("코멘트") and _is_picked_t3(cn, s["학생명"]): ready += 1
+                elif not s.get("코멘트"): missing.append(f"{cn} — {s['학생명']}")
         if missing:
             with st.expander(f"코멘트 없는 학생 {len(missing)}명 (건너뜀)"):
                 for m in missing: st.text(m)
@@ -1212,6 +1242,7 @@ with tab3:
 
                             for s in sts:
                                 if not s.get("코멘트"): continue
+                                if not _is_picked_t3(cn, s["학생명"]): continue
                                 try:
                                     status.markdown(f"**{cn}** · {s['학생명']}")
                                     fortune_area2.caption(f"오늘의 운세 — {random.choice(FORTUNES)}")
