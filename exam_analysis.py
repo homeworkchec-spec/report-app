@@ -39,7 +39,7 @@ import matplotlib.font_manager as fm
 import numpy as np
 import pandas as pd
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 import openai
 
@@ -102,16 +102,9 @@ _KO_FONT, _KO_FONT_PATH = _setup_korean_font()
 DIFFICULTY_LEVELS = ["하", "중하", "중", "중상", "상"]
 DIFFICULTY_NUM = {"하": 1, "중하": 2, "중": 3, "중상": 4, "상": 5}
 
-# OCR/텍스트 모델 — 사이드바에서 변경 가능. 기본은 가장 안정적인 최신 4o 스냅샷.
-VISION_MODEL_DEFAULT = "gpt-4o-2024-11-20"
-TEXT_MODEL_DEFAULT = "gpt-4o-2024-11-20"
-VISION_MODEL_OPTIONS = ["gpt-4o-2024-11-20", "gpt-4o", "gpt-5.1", "gpt-4o-mini"]
-VISION_MODEL_LABELS = {
-    "gpt-4o-2024-11-20": "gpt-4o (2024-11) · 권장 · 정확",
-    "gpt-4o":            "gpt-4o · 안정",
-    "gpt-5.1":           "gpt-5.1 · 가장 강함 (느림·비쌈)",
-    "gpt-4o-mini":       "gpt-4o-mini · 빠름·저렴 (정확도 ↓)",
-}
+# OCR + 텍스트 생성 모두 같은 모델 사용. 사이드바에서 변경 옵션 없음 — 단일 모델 고정.
+VISION_MODEL_DEFAULT = "gpt-5.1"
+TEXT_MODEL_DEFAULT = "gpt-5.1"
 
 DEFAULT_ACADEMY = "최상위학원"
 DEFAULT_PHONE = "0507-1385-4320"
@@ -356,7 +349,9 @@ def _img_to_data_url(img_bytes: bytes, mime: str = "image/png") -> str:
 
 def _normalize_image(file_bytes: bytes, max_side: int = 2000) -> tuple[bytes, str]:
     try:
-        im = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+        im = Image.open(io.BytesIO(file_bytes))
+        # EXIF Orientation 적용 — 핸드폰 스캔본 회전 방지
+        im = ImageOps.exif_transpose(im).convert("RGB")
         w, h = im.size
         scale = min(1.0, max_side / max(w, h))
         if scale < 1.0:
@@ -369,17 +364,34 @@ def _normalize_image(file_bytes: bytes, max_side: int = 2000) -> tuple[bytes, st
 
 
 def _safe_json_loads(text: str) -> dict:
+    """모델이 코드블록·앞뒤 prose 를 붙여 반환해도 견디는 관대 파서."""
+    if not text or not text.strip():
+        return {}
     text = text.strip()
+    # ``` 코드블록 제거
     m = re.search(r"```(?:json)?\s*(.+?)```", text, re.DOTALL)
     if m:
         text = m.group(1).strip()
-    return json.loads(text)
+    # 1차: 그대로 시도
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # 2차: 가장 큰 { ... } 블록만 추출
+    m = re.search(r"\{[\s\S]*\}", text)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    return {}
 
 
 def ocr_exam_images(api_key: str, images: list[bytes],
                     subject_hint: str = "영어", grade_hint: str = "",
                     model: str = VISION_MODEL_DEFAULT) -> tuple[ExamMeta, list[Question]]:
-    client = openai.OpenAI(api_key=api_key)
+    # 큰 이미지·다중 페이지에 대비해 timeout 넉넉히, 자동 재시도 2회.
+    client = openai.OpenAI(api_key=api_key).with_options(timeout=240, max_retries=2)
     content: list[dict[str, Any]] = [
         {"type": "text", "text": OCR_USER_TEMPLATE.format(subject=subject_hint, grade=grade_hint)}
     ]
@@ -397,7 +409,10 @@ def ocr_exam_images(api_key: str, images: list[bytes],
         max_tokens=7000,
         response_format={"type": "json_object"},
     )
-    data = _safe_json_loads(resp.choices[0].message.content or "{}")
+    raw_content = resp.choices[0].message.content or "{}"
+    data = _safe_json_loads(raw_content)
+    if not data:
+        raise ValueError("OCR 응답이 JSON 으로 해석되지 않았습니다. 이미지 화질이 낮거나 모델이 응답을 거부한 가능성이 있습니다.")
 
     meta_d = data.get("exam_meta", {}) or {}
     meta = ExamMeta(
@@ -447,7 +462,29 @@ def ocr_exam_images(api_key: str, images: list[bytes],
     qs.sort(key=lambda x: x.no)
     if meta.total_questions == 0:
         meta.total_questions = len(qs)
+    _clean_coordinates(qs)
     return meta, qs
+
+
+def _clean_coordinates(qs: list[Question]) -> None:
+    """같은 페이지의 인접 문항이 좌표가 겹치지 않도록 정리.
+    OCR 모델이 비슷한 영역을 두 문항에 할당해 크롭이 똑같이 나오는 것을 방지."""
+    if not qs:
+        return
+    # 페이지별 그룹
+    by_page: dict[int, list[Question]] = {}
+    for q in qs:
+        by_page.setdefault(q.page_index, []).append(q)
+    for page_qs in by_page.values():
+        page_qs.sort(key=lambda x: (x.top_ratio, x.no))
+        for i in range(len(page_qs) - 1):
+            cur, nxt = page_qs[i], page_qs[i + 1]
+            # 현재 문항의 하단이 다음 문항의 상단을 침범하면 잘라줌
+            if cur.bottom_ratio > nxt.top_ratio:
+                # 가운데 점에서 잘라 양쪽이 자연스럽게 만남
+                mid = (cur.bottom_ratio + nxt.top_ratio) / 2
+                cur.bottom_ratio = max(cur.top_ratio + 0.02, mid)
+                nxt.top_ratio = min(nxt.bottom_ratio - 0.02, mid)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -518,7 +555,8 @@ def crop_image_region(image_bytes: bytes, top_ratio: float, bottom_ratio: float,
     if not image_bytes:
         return b""
     try:
-        im = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        im = Image.open(io.BytesIO(image_bytes))
+        im = ImageOps.exif_transpose(im).convert("RGB")
     except Exception:
         return b""
     w, h = im.size
@@ -539,16 +577,25 @@ def crop_image_region(image_bytes: bytes, top_ratio: float, bottom_ratio: float,
 # 분포 / 라벨
 # ═══════════════════════════════════════════════════════════════
 def auto_killer_flags(meta: ExamMeta, qs: list[Question]) -> list[bool]:
+    """난이도 '상' 우선. 없으면 '중상' + 상위 25% 배점 보조 표시.
+    상위 25% 임계는 numpy 분위수로 정확하게 계산."""
     if not qs:
         return []
     flags = [q.difficulty == "상" for q in qs]
     if not any(flags):
-        scores = sorted([q.score for q in qs if q.score > 0])
-        threshold = scores[int(len(scores) * 0.75)] if scores else 0
+        scores = [q.score for q in qs if q.score > 0]
+        threshold = float(np.quantile(scores, 0.75)) if scores else 0.0
         for i, q in enumerate(qs):
             if q.difficulty == "중상" and q.score >= threshold:
                 flags[i] = True
     return flags
+
+
+def merge_killer_flags(qs: list[Question], auto_flags: list[bool]) -> list[bool]:
+    """수동으로 켠 항목은 유지, 추가로 자동 후보를 켜기만 (끄지 않음)."""
+    if not qs:
+        return []
+    return [bool(q.is_killer) or bool(af) for q, af in zip(qs, auto_flags)]
 
 
 def derive_difficulty_label(qs: list[Question]) -> str:
@@ -636,8 +683,9 @@ def humanize_text(text: str, seed: int | None = None) -> str:
             i = rng.choice(ips)
             sentences[i] = sentences[i][:-4] + "라 할 수 있습니다."
         out = " ".join(sentences)
-    out = re.sub(r"분석한 결과,?\s*", "", out)
-    out = re.sub(r"^\s*결과적으로,?\s*", "", out, flags=re.MULTILINE)
+    # 문장 시작에 등장하는 경우만 제거 — 문장 중간에서는 유효한 표현이라 보존
+    out = re.sub(r"(?:^|(?<=[.!?]\s))분석한 결과,?\s*", "", out)
+    out = re.sub(r"(?:^|(?<=[.!?]\s))결과적으로,?\s*", "", out)
     out = re.sub(r"[ \t]+", " ", out)
     out = re.sub(r"\n{3,}", "\n\n", out)
     return out.strip()
@@ -1463,7 +1511,6 @@ def _init_state():
     _ss("academy", DEFAULT_ACADEMY)
     _ss("phone", DEFAULT_PHONE)
     _ss("chart_theme", "editorial")
-    _ss("ocr_model", VISION_MODEL_DEFAULT)
 
 
 def render_sidebar():
@@ -1482,19 +1529,6 @@ def render_sidebar():
         "</div>",
         unsafe_allow_html=True,
     )
-
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.markdown('<p class="section-label">OCR 모델</p>', unsafe_allow_html=True)
-    st.caption("이미지 분석 + 텍스트 생성에 쓸 모델. 정확도/비용/속도 trade-off.")
-    cur_m = _ss("ocr_model", VISION_MODEL_DEFAULT)
-    new_m = st.selectbox(
-        "ocr_model_select", VISION_MODEL_OPTIONS,
-        index=VISION_MODEL_OPTIONS.index(cur_m) if cur_m in VISION_MODEL_OPTIONS else 0,
-        format_func=lambda k: VISION_MODEL_LABELS.get(k, k),
-        label_visibility="collapsed", key="ocr_model_select",
-    )
-    if new_m != cur_m:
-        _set_ss("ocr_model", new_m)
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<p class="section-label">차트 테마</p>', unsafe_allow_html=True)
@@ -1528,6 +1562,12 @@ def render_sidebar():
                 st.session_state[SS_PREFIX + k] = b""
             else:
                 st.session_state[SS_PREFIX + k] = ""
+        # 업로드 위젯 자체도 함께 비우기
+        st.session_state.pop("exam_uploader", None)
+        # 편집된 텍스트 입력 캐시도 지움
+        for k in list(st.session_state.keys()):
+            if k.startswith(("ed_kd_", "ed_cap_", "ed_gi", "ed_seung", "ed_gyeol")):
+                st.session_state.pop(k, None)
         st.rerun()
 
     meta: ExamMeta | None = _ss("meta")
@@ -1660,9 +1700,8 @@ def render_main(api_key: str):
                         f.seek(0)
                         img_bytes_list.append(f.read())
                     _set_ss("original_images", img_bytes_list)
-                    ocr_model = _ss("ocr_model", VISION_MODEL_DEFAULT)
-                    status.update(label=f"{ocr_model} 으로 {len(files)}장 분석 중...")
-                    meta, qs = ocr_exam_images(api_key, img_bytes_list, "영어", "", model=ocr_model)
+                    status.update(label=f"{VISION_MODEL_DEFAULT} 으로 {len(files)}장 분석 중...")
+                    meta, qs = ocr_exam_images(api_key, img_bytes_list, "영어", "")
                     flags = auto_killer_flags(meta, qs)
                     for q, flag in zip(qs, flags):
                         q.is_killer = flag
@@ -1676,6 +1715,18 @@ def render_main(api_key: str):
                 except openai.AuthenticationError:
                     status.update(label="API Key 오류", state="error")
                     st.error("OpenAI API Key 가 유효하지 않습니다.")
+                except openai.RateLimitError:
+                    status.update(label="요청 한도 초과", state="error")
+                    st.error("OpenAI 요청 한도(rate limit)에 걸렸습니다. 1~2분 뒤 다시 시도해 주세요.")
+                except openai.APITimeoutError:
+                    status.update(label="시간 초과", state="error")
+                    st.error("OCR 응답이 너무 오래 걸렸습니다. 이미지 수를 줄이거나 다시 시도해 주세요.")
+                except openai.APIConnectionError:
+                    status.update(label="연결 실패", state="error")
+                    st.error("OpenAI 서버 연결에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.")
+                except ValueError as e:
+                    status.update(label="OCR 결과 해석 실패", state="error")
+                    st.error(f"{e}")
                 except Exception as e:
                     status.update(label="OCR 실패", state="error")
                     st.error(f"분석 중 오류: {e}")
@@ -1734,9 +1785,11 @@ def render_main(api_key: str):
 
     qa, qb, qc = st.columns(3)
     with qa:
-        if st.button("어려운 문항 자동 표시", use_container_width=True):
-            flags = auto_killer_flags(meta, qs)
-            for q, f in zip(qs, flags):
+        if st.button("어려운 문항 자동 표시", use_container_width=True,
+                     help="수동 체크는 유지하고 추가 후보만 켭니다."):
+            auto = auto_killer_flags(meta, qs)
+            merged = merge_killer_flags(qs, auto)
+            for q, f in zip(qs, merged):
                 q.is_killer = f
             _set_ss("questions", qs)
             st.rerun()
@@ -1772,11 +1825,9 @@ def render_main(api_key: str):
             try:
                 with st.status("생성 중...", expanded=True) as status:
                     originals: list[bytes] = _ss("original_images", [])
-                    ocr_model = _ss("ocr_model", VISION_MODEL_DEFAULT)
                     status.update(label="어려운 문항 깊이 분석 + 시험지 이미지 재구성...")
                     payload, img_b, word_b, text_b = _generate_outputs(
                         api_key, meta, qs, chart_theme, academy, phone, originals,
-                        model=ocr_model,
                     )
                     _set_ss("payload", payload)
                     _set_ss("blog_image", img_b)
@@ -1799,11 +1850,14 @@ def render_main(api_key: str):
         new_gi = st.text_area("총평 (기)", payload.gi, height=160, key="ed_gi")
         new_seung = st.text_area("시험 기조 (승)", payload.seung, height=200, key="ed_seung")
 
-        # 차트 캡션
-        with st.expander("차트 캡션 4종", expanded=False):
+        # 차트 캡션 5종 (유형 / 객관식·서답형 / 범위 / 난이도 / 위치맵)
+        with st.expander("차트 캡션 5종", expanded=False):
             new_captions = {}
-            for k, label in [("type", "유형 차트"), ("scope", "범위 차트"),
-                             ("difficulty", "난이도 차트"), ("location", "위치맵 차트")]:
+            for k, label in [("type",       "유형 차트"),
+                             ("format",     "객관식·서답형 차트"),
+                             ("scope",      "범위 차트"),
+                             ("difficulty", "난이도 차트"),
+                             ("location",   "위치맵 차트")]:
                 new_captions[k] = st.text_area(
                     label, payload.captions.get(k, ""), height=80, key=f"ed_cap_{k}",
                 )
