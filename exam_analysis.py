@@ -766,43 +766,75 @@ def _df_to_questions(df: pd.DataFrame) -> list[Question]:
     return qs
 
 
-def render_exam_tab(api_key: str):
-    """app.py 의 with tab4: 안에서 호출."""
-    if not api_key:
-        st.error("OpenAI API Key 가 필요합니다. .env 또는 Streamlit Secrets 에 OPENAI_API_KEY 를 설정하세요.")
-        return
-
-    # init session state
+def _init_state():
     _ss("meta", None)
     _ss("questions", [])
     _ss("killers", None)
     _ss("summary", "")
     _ss("uploaded_keys", [])
+    _ss("subject_hint", "영어")
+    _ss("grade_hint", "고2")
 
-    # 헤더
-    st.markdown('<div class="eyebrow">EXAM ANALYSIS</div>', unsafe_allow_html=True)
-    st.markdown("# 시험지 분석 자동화")
-    st.caption("스캔본을 업로드하면 GPT-4o Vision 이 메타정보·문항 유형·난이도를 추출합니다.")
-    st.markdown('<div class="divider-strong"></div>', unsafe_allow_html=True)
+
+def render_sidebar():
+    """시험 분석 모드의 사이드바. app.py 의 with st.sidebar: 안에서 호출."""
+    _init_state()
+    st.markdown("### 분석 설정")
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+    st.markdown('<p class="section-label">OCR 힌트</p>', unsafe_allow_html=True)
+    st.selectbox(
+        "과목", ["영어", "수학", "국어", "기타"],
+        key=SS_PREFIX + "subject_hint",
+        help="과목을 알려주면 OCR 의 유형 분류 정확도가 높아집니다.",
+    )
+    st.text_input(
+        "학교/학년", key=SS_PREFIX + "grade_hint",
+        help="예: 고2, 중3, 고1",
+    )
+
+    st.markdown('<p class="section-label">초기화</p>', unsafe_allow_html=True)
+    if st.button("분석 결과 초기화", use_container_width=True):
+        for k in ("meta", "questions", "killers", "summary", "uploaded_keys"):
+            st.session_state[SS_PREFIX + k] = None if k in ("meta", "killers") else ([] if k in ("questions", "uploaded_keys") else "")
+        st.rerun()
+
+    meta: ExamMeta | None = _ss("meta")
+    if meta is not None:
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        st.markdown('<p class="section-label">현재 시험</p>', unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='font-size:13px;color:var(--text-body);line-height:1.6'>"
+            f"<b>{meta.title or '제목 없음'}</b><br/>"
+            f"{meta.school or ''} {meta.grade or ''} {meta.subject or ''}<br/>"
+            f"<span style='color:var(--text-muted)'>"
+            f"{meta.exam_type} · {meta.total_questions}문항 · {meta.total_score}점"
+            f"</span></div>",
+            unsafe_allow_html=True,
+        )
+
+
+def render_main(api_key: str):
+    """시험 분석 모드의 본문. app.py 의 메인 영역에서 호출."""
+    if not api_key:
+        st.error("OpenAI API Key 가 필요합니다. .env 또는 Streamlit Secrets 에 OPENAI_API_KEY 를 설정하세요.")
+        return
+
+    _init_state()
 
     # ── Stage 1. 업로드 & OCR ──
     st.markdown('<div class="section-mark">§ 1. 업로드 & OCR</div>', unsafe_allow_html=True)
 
-    col_left, col_right = st.columns([3, 2])
-    with col_right:
-        st.markdown("##### 분석 힌트")
-        subject_hint = st.selectbox("과목", ["영어", "수학", "국어", "기타"], key="exam_subject_hint")
-        grade_hint = st.text_input("학교/학년", value=_ss("grade_hint_val", "고2"),
-                                   key="exam_grade_hint",
-                                   help="예: 고2, 중3, 고1 — OCR 정확도를 높입니다.")
-    with col_left:
-        files = st.file_uploader(
-            "시험지 이미지 업로드 (여러 페이지 동시 가능)",
-            type=["png", "jpg", "jpeg", "webp"],
-            accept_multiple_files=True,
-            key="exam_uploader",
-            help="시험지 한 부 전체를 페이지별 이미지로 올리세요. PDF는 미리 이미지로 변환해 주세요.",
-        )
+    files = st.file_uploader(
+        "시험지 이미지 업로드 (여러 페이지 동시 가능)",
+        type=["png", "jpg", "jpeg", "webp"],
+        accept_multiple_files=True,
+        key="exam_uploader",
+        help="시험지 한 부 전체를 페이지별 이미지로 올리세요. PDF는 미리 이미지로 변환해 주세요.",
+    )
+
+    subject_hint = _ss("subject_hint", "영어")
+    grade_hint = _ss("grade_hint", "고2")
 
     if files:
         keys = [f"{f.name}_{f.size}" for f in files]

@@ -813,42 +813,119 @@ DEFAULT_LOGO = load_default_logo()
 
 
 # ════════════════════════════════════════════════════════════
-# 9. SIDEBAR
+# 9. APP MODE — 대분류 메뉴 (보고서 자동화 / 시험 분석)
+#    URL ?mode=exam 으로 직접 진입 가능. 두 영역의 사이드바·본문이 완전히 분리됩니다.
 # ════════════════════════════════════════════════════════════
+MODE_REPORT = "report"
+MODE_EXAM   = "exam"
+
+_qmode = st.query_params.get("mode", "")
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = MODE_EXAM if _qmode == "exam" else MODE_REPORT
+elif _qmode in (MODE_REPORT, MODE_EXAM) and st.session_state.app_mode != _qmode:
+    st.session_state.app_mode = _qmode
+
+def _switch_mode(target: str):
+    st.session_state.app_mode = target
+    st.query_params["mode"] = target
+
+APP_MODE = st.session_state.app_mode
+
+
+# ════════════════════════════════════════════════════════════
+# 10. SIDEBAR — 모드별 다른 패널
+# ════════════════════════════════════════════════════════════
+sys_prompt = DEFAULT_SYSTEM_PROMPT
+usr_prompt = DEFAULT_USER_PROMPT
+test_title = "2026년도 1차 정기테스트 결과"
+
 with st.sidebar:
-    st.markdown("### 보고서 설정")
+    # 공통 헤더 — 어떤 모드든 작은 브랜드 마크
+    st.markdown(
+        "<div style='display:flex;align-items:baseline;gap:8px;margin-bottom:4px'>"
+        "<span style='font-weight:700;color:var(--text-heading);font-size:15px'>최상위학원</span>"
+        "<span style='font-family:var(--font-mono);font-size:10px;color:var(--text-faint);"
+        "letter-spacing:0.08em;text-transform:uppercase'>WORKBENCH</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<p class='section-label' style='margin-top:0'>"
+        f"{'보고서 자동화' if APP_MODE == MODE_REPORT else '시험 분석'}"
+        f"</p>",
+        unsafe_allow_html=True,
+    )
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-    test_title = st.text_input("시험 제목", value="2026년도 1차 정기테스트 결과")
+    if APP_MODE == MODE_REPORT:
+        st.markdown("### 보고서 설정")
+        test_title = st.text_input("시험 제목", value="2026년도 1차 정기테스트 결과")
 
-    # 프롬프트
-    st.markdown('<p class="section-label">프롬프트 편집</p>', unsafe_allow_html=True)
-    with st.expander("시스템 프롬프트"):
-        sys_prompt = st.text_area("sys", value=DEFAULT_SYSTEM_PROMPT, height=100, label_visibility="collapsed")
-    with st.expander("코멘트 작성 지침"):
-        usr_prompt = st.text_area("usr", value=DEFAULT_USER_PROMPT, height=300, label_visibility="collapsed",
-            help="변수: {student_name}, {reading_score}, {grammar_score}, {reading_avg}, {grammar_avg}, {attitude}, {sincerity}, {notes}, {keyword_section}, {keyword_guideline}")
+        st.markdown('<p class="section-label">프롬프트 편집</p>', unsafe_allow_html=True)
+        with st.expander("시스템 프롬프트"):
+            sys_prompt = st.text_area("sys", value=DEFAULT_SYSTEM_PROMPT, height=100, label_visibility="collapsed")
+        with st.expander("코멘트 작성 지침"):
+            usr_prompt = st.text_area("usr", value=DEFAULT_USER_PROMPT, height=300, label_visibility="collapsed",
+                help="변수: {student_name}, {reading_score}, {grammar_score}, {reading_avg}, {grammar_avg}, {attitude}, {sincerity}, {notes}, {keyword_section}, {keyword_guideline}")
 
-    if not API_KEY:
+        if not API_KEY:
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            st.error("API Key 미설정 — .env 파일 또는 Streamlit Secrets에 OPENAI_API_KEY를 설정하세요.")
+
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        st.error("API Key 미설정 — .env 파일 또는 Streamlit Secrets에 OPENAI_API_KEY를 설정하세요.")
-
-    # ── 쉬는 시간 ──
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    if st.button("오늘의 강사 운세", use_container_width=True):
-        st.info(random.choice(FORTUNES))
+        if st.button("오늘의 강사 운세", use_container_width=True):
+            st.info(random.choice(FORTUNES))
+    else:
+        exam_analysis.render_sidebar()
+        if not API_KEY:
+            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+            st.error("API Key 미설정 — .env 또는 Streamlit Secrets 설정 필요.")
 
 
 # ════════════════════════════════════════════════════════════
-# 10. MAIN CONTENT
+# 11. HEADER — 좌: 타이틀, 우: 대분류 메뉴 (segmented control)
 # ════════════════════════════════════════════════════════════
-st.markdown("# 최상위학원 보고서 자동화")
-st.caption("영어 정기시험 보고서를 자동으로 생성합니다")
+hcol_title, hcol_nav = st.columns([5, 3])
+with hcol_title:
+    if APP_MODE == MODE_REPORT:
+        st.markdown("# 최상위학원 보고서 자동화")
+        st.caption("영어 정기시험 보고서를 자동으로 생성합니다")
+    else:
+        st.markdown("# 최상위학원 시험 분석")
+        st.caption("시험지 스캔본을 업로드하면 OCR·메타정보 분석·킬러문항 제안·총평까지 자동화합니다")
+
+with hcol_nav:
+    st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
+    nav_a, nav_b = st.columns(2)
+    with nav_a:
+        st.button(
+            "보고서 자동화",
+            key="nav_report",
+            type="primary" if APP_MODE == MODE_REPORT else "secondary",
+            use_container_width=True,
+            on_click=_switch_mode, args=(MODE_REPORT,),
+        )
+    with nav_b:
+        st.button(
+            "시험 분석",
+            key="nav_exam",
+            type="primary" if APP_MODE == MODE_EXAM else "secondary",
+            use_container_width=True,
+            on_click=_switch_mode, args=(MODE_EXAM,),
+        )
+
 st.markdown('<div class="divider-strong"></div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "데이터 업로드", "코멘트 생성", "보고서 생성", "시험 분석",
-])
+
+# ════════════════════════════════════════════════════════════
+# 12. MAIN CONTENT — 모드별 분기
+# ════════════════════════════════════════════════════════════
+if APP_MODE == MODE_EXAM:
+    exam_analysis.render_main(API_KEY)
+    st.stop()
+
+# 이하 보고서 자동화 모드 전용
+tab1, tab2, tab3 = st.tabs(["데이터 업로드", "코멘트 생성", "보고서 생성"])
 
 
 # ── Tab 1 ──
@@ -1163,7 +1240,3 @@ with tab3:
                 use_container_width=True, type="primary",
             )
 
-
-# ── Tab 4: 시험지 분석 자동화 ──
-with tab4:
-    exam_analysis.render_exam_tab(API_KEY)
