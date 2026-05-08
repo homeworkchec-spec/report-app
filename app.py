@@ -25,6 +25,9 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 import openai
 
+from design_tokens import build_css
+import exam_analysis
+
 
 # ════════════════════════════════════════════════════════════
 # 0. FONT INSTALL (Linux 환경에서 맑은 고딕 설치)
@@ -110,183 +113,10 @@ AI_MAX_TOKENS = 500
 
 
 # ════════════════════════════════════════════════════════════
-# 3. DESIGN SYSTEM — CSS Custom Properties
+# 3. DESIGN SYSTEM — Editorial Academic tokens
+#    primitive → semantic → component, build_css() 단일 진입점
 # ════════════════════════════════════════════════════════════
-st.markdown("""
-<style>
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
-
-:root {
-    --c-primary:     #4A5A8C;
-    --c-primary-50:  #F0F2F8;
-    --c-primary-100: #DDE1EF;
-    --c-primary-600: #3D4D7A;
-    --c-gray-50:  #F9FAFB;
-    --c-gray-100: #F3F4F6;
-    --c-gray-200: #E5E7EB;
-    --c-gray-300: #D1D5DB;
-    --c-gray-400: #9CA3AF;
-    --c-gray-500: #6B7280;
-    --c-gray-700: #374151;
-    --c-gray-900: #111827;
-    --c-success:    #059669;
-    --c-success-bg: #ECFDF5;
-    --c-warn:       #D97706;
-    --c-warn-bg:    #FFFBEB;
-    --c-error:      #DC2626;
-    --c-error-bg:   #FEF2F2;
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.06), 0 2px 4px -1px rgba(0,0,0,0.04);
-}
-
-/* ── Global ── */
-html, body, .stApp,
-.stApp [class*="css"] {
-    font-family: 'Pretendard Variable', 'Pretendard', -apple-system,
-                 BlinkMacSystemFont, 'Malgun Gothic', sans-serif !important;
-}
-.stApp { background: var(--c-gray-50); }
-
-/* ── Sidebar ── */
-section[data-testid="stSidebar"] {
-    background: #FFFFFF;
-    border-right: 1px solid var(--c-gray-200);
-}
-section[data-testid="stSidebar"] .stMarkdown p {
-    font-size: 13px;
-    color: var(--c-gray-500);
-}
-
-/* ── Typography ── */
-h1 {
-    color: var(--c-primary) !important;
-    font-weight: 700 !important;
-    font-size: 1.75rem !important;
-    letter-spacing: -0.5px;
-}
-h2, h3 {
-    color: var(--c-gray-900) !important;
-    font-weight: 600 !important;
-}
-h3 { font-size: 1.05rem !important; }
-
-/* ── Cards ── */
-.card {
-    background: #fff;
-    border: 1px solid var(--c-gray-200);
-    border-radius: var(--radius-lg);
-    padding: 20px 22px;
-    margin-bottom: 10px;
-    transition: box-shadow .15s ease;
-}
-.card:hover { box-shadow: var(--shadow-md); }
-.card-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--c-gray-400);
-    text-transform: uppercase;
-    letter-spacing: .6px;
-    margin-bottom: 6px;
-}
-.card-value {
-    font-size: 26px;
-    font-weight: 700;
-    color: var(--c-primary);
-    line-height: 1.2;
-}
-.card-meta {
-    font-size: 12.5px;
-    color: var(--c-gray-500);
-    margin-top: 6px;
-}
-
-/* ── Tag / Badge ── */
-.tag {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 9999px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: .2px;
-}
-.tag-done   { background: var(--c-success-bg); color: var(--c-success); }
-.tag-partial { background: var(--c-warn-bg);    color: var(--c-warn); }
-.tag-empty  { background: var(--c-primary-50); color: var(--c-primary); }
-
-/* ── Buttons ── */
-.stButton > button {
-    border-radius: var(--radius-md) !important;
-    font-weight: 500 !important;
-    padding: .5rem 1.25rem !important;
-    transition: all .12s ease !important;
-    font-size: 14px !important;
-}
-
-/* ── Progress ── */
-.stProgress > div > div > div {
-    background: linear-gradient(90deg, var(--c-primary), var(--c-primary-600)) !important;
-    border-radius: 9999px !important;
-}
-
-/* ── Tabs ── */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 0;
-    border-bottom: 2px solid var(--c-gray-200);
-}
-.stTabs [data-baseweb="tab"] {
-    border-radius: 0 !important;
-    padding: 10px 28px !important;
-    font-weight: 500 !important;
-    font-size: 14px !important;
-    color: var(--c-gray-500) !important;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-}
-.stTabs [aria-selected="true"] {
-    color: var(--c-primary) !important;
-    border-bottom-color: var(--c-primary) !important;
-    background: transparent !important;
-}
-
-/* ── Divider ── */
-.divider {
-    height: 1px;
-    background: var(--c-gray-200);
-    margin: 20px 0;
-}
-.divider-accent {
-    height: 2px;
-    background: linear-gradient(90deg, var(--c-primary), transparent);
-    margin: 12px 0 24px 0;
-    border-radius: 1px;
-}
-
-/* ── Empty state ── */
-.empty {
-    text-align: center;
-    padding: 56px 24px;
-    color: var(--c-gray-400);
-    font-size: 14px;
-}
-
-/* ── Section label (sidebar) ── */
-.section-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--c-gray-400);
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    margin: 24px 0 8px 0;
-}
-
-/* ── Hide defaults ── */
-#MainMenu, footer { visibility: hidden; }
-.stDeployButton { display: none; }
-</style>
-""", unsafe_allow_html=True)
+st.markdown(build_css(), unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════
@@ -1014,9 +844,11 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════
 st.markdown("# 최상위학원 보고서 자동화")
 st.caption("영어 정기시험 보고서를 자동으로 생성합니다")
-st.markdown('<div class="divider-accent"></div>', unsafe_allow_html=True)
+st.markdown('<div class="divider-strong"></div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["데이터 업로드", "코멘트 생성", "보고서 생성"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "데이터 업로드", "코멘트 생성", "보고서 생성", "시험 분석",
+])
 
 
 # ── Tab 1 ──
@@ -1060,12 +892,12 @@ with tab1:
                 ns = len(d["students"]); teacher = d["info"].get("담당T","-")
                 time_s = d["info"].get("수업시간","-")
                 nc = sum(1 for s in d["students"] if s.get("코멘트"))
-                tag_cls = "tag-done" if nc == ns else ("tag-partial" if nc > 0 else "tag-empty")
+                tag_cls = "tag-ok" if nc == ns else ("tag-warn" if nc > 0 else "tag-neutral")
                 st.markdown(f"""<div class="card">
-                    <div class="card-label">{cn}</div>
-                    <div class="card-value">{ns}명</div>
+                    <div class="card-eyebrow">{cn}</div>
+                    <div class="card-value">{ns}<span style='font-size:14px;color:var(--text-muted)'> 명</span></div>
                     <div class="card-meta">{teacher} · {time_s}</div>
-                    <div style="margin-top:8px"><span class="tag {tag_cls}">코멘트 {nc}/{ns}</span></div>
+                    <div style="margin-top:10px"><span class="tag {tag_cls}">코멘트 {nc}/{ns}</span></div>
                 </div>""", unsafe_allow_html=True)
 
         st.markdown("### 학생 데이터")
@@ -1330,3 +1162,8 @@ with tab3:
                 file_name=fname, mime="application/zip",
                 use_container_width=True, type="primary",
             )
+
+
+# ── Tab 4: 시험지 분석 자동화 ──
+with tab4:
+    exam_analysis.render_exam_tab(API_KEY)
