@@ -406,7 +406,7 @@ def ocr_exam_images(api_key: str, images: list[bytes],
         messages=[{"role": "system", "content": OCR_SYSTEM},
                   {"role": "user", "content": content}],
         temperature=0.1,
-        max_tokens=7000,
+        max_completion_tokens=7000,
         response_format={"type": "json_object"},
     )
     raw_content = resp.choices[0].message.content or "{}"
@@ -761,7 +761,7 @@ JSON 외 텍스트 없이 반환하세요."""
         messages=[{"role": "system", "content": KILLER_DEEP_SYSTEM},
                   {"role": "user", "content": user}],
         temperature=0.55,
-        max_tokens=2000,
+        max_completion_tokens=2000,
         response_format={"type": "json_object"},
     )
     data = _safe_json_loads(resp.choices[0].message.content or "{}")
@@ -928,7 +928,7 @@ def gen_blog_body(api_key: str, meta: ExamMeta, qs: list[Question],
         messages=[{"role": "system", "content": BLOG_BODY_SYSTEM},
                   {"role": "user", "content": user}],
         temperature=0.85,
-        max_tokens=2400,
+        max_completion_tokens=2400,
         response_format={"type": "json_object"},
     ).choices[0].message.content or "{}"
 
@@ -944,7 +944,7 @@ def gen_blog_body(api_key: str, meta: ExamMeta, qs: list[Question],
         messages=[{"role": "system", "content": polish_sys},
                   {"role": "user", "content": draft}],
         temperature=0.6,
-        max_tokens=2400,
+        max_completion_tokens=2400,
         response_format={"type": "json_object"},
     ).choices[0].message.content or draft
 
