@@ -28,14 +28,6 @@ import openai
 from design_tokens import build_css
 import exam_analysis
 
-# 테마 — 사이드바에서 선택. URL ?theme=mono|editorial|vivid 도 지원.
-THEME_OPTIONS = ["mono", "editorial", "vivid"]
-THEME_LABELS = {"mono": "Mono · 색 없음", "editorial": "Editorial · 종이 톤", "vivid": "Vivid · 활발"}
-_qtheme = st.query_params.get("theme", "")
-if "app_theme" not in st.session_state:
-    st.session_state.app_theme = _qtheme if _qtheme in THEME_OPTIONS else "editorial"
-APP_THEME = st.session_state.app_theme
-
 
 # ════════════════════════════════════════════════════════════
 # 0. FONT INSTALL (Linux 환경에서 맑은 고딕 설치)
@@ -124,7 +116,7 @@ AI_MAX_TOKENS = 500
 # 3. DESIGN SYSTEM — Editorial Academic tokens
 #    primitive → semantic → component, build_css() 단일 진입점
 # ════════════════════════════════════════════════════════════
-st.markdown(build_css(APP_THEME), unsafe_allow_html=True)
+st.markdown(build_css("editorial"), unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════
@@ -863,23 +855,6 @@ with st.sidebar:
         f"</p>",
         unsafe_allow_html=True,
     )
-
-    # ── 공통: 테마 선택 ──
-    st.markdown('<p class="section-label" style="margin-top:14px">테마</p>', unsafe_allow_html=True)
-    new_theme = st.radio(
-        "theme_radio",
-        THEME_OPTIONS,
-        index=THEME_OPTIONS.index(APP_THEME),
-        format_func=lambda k: THEME_LABELS[k],
-        horizontal=False,
-        label_visibility="collapsed",
-        key="theme_radio",
-    )
-    if new_theme != APP_THEME:
-        st.session_state.app_theme = new_theme
-        st.query_params["theme"] = new_theme
-        st.rerun()
-
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
     if APP_MODE == MODE_REPORT:
@@ -946,7 +921,7 @@ st.markdown('<div class="divider-strong"></div>', unsafe_allow_html=True)
 # 12. MAIN CONTENT — 모드별 분기
 # ════════════════════════════════════════════════════════════
 if APP_MODE == MODE_EXAM:
-    exam_analysis.render_main(API_KEY, theme=APP_THEME)
+    exam_analysis.render_main(API_KEY)
     st.stop()
 
 # 이하 보고서 자동화 모드 전용

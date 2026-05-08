@@ -1294,6 +1294,14 @@ def _set_ss(key: str, value):
     st.session_state[SS_PREFIX + key] = value
 
 
+CHART_THEME_OPTIONS = ["editorial", "mono", "vivid"]
+CHART_THEME_LABELS = {
+    "editorial": "Editorial · 종이 톤",
+    "mono":      "Mono · 흑백",
+    "vivid":     "Vivid · 활발한 색",
+}
+
+
 def _init_state():
     _ss("meta", None)
     _ss("questions", [])
@@ -1305,6 +1313,7 @@ def _init_state():
     _ss("uploaded_keys", [])
     _ss("academy", DEFAULT_ACADEMY)
     _ss("phone", DEFAULT_PHONE)
+    _ss("chart_theme", "editorial")
 
 
 def render_sidebar():
@@ -1323,6 +1332,21 @@ def render_sidebar():
         "</div>",
         unsafe_allow_html=True,
     )
+
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<p class="section-label">차트 테마</p>', unsafe_allow_html=True)
+    st.caption("보고서에 들어갈 차트 4종의 색감을 정합니다.")
+    cur = _ss("chart_theme", "editorial")
+    new_ct = st.radio(
+        "chart_theme_radio",
+        CHART_THEME_OPTIONS,
+        index=CHART_THEME_OPTIONS.index(cur) if cur in CHART_THEME_OPTIONS else 0,
+        format_func=lambda k: CHART_THEME_LABELS[k],
+        label_visibility="collapsed",
+        key="chart_theme_radio",
+    )
+    if new_ct != cur:
+        _set_ss("chart_theme", new_ct)
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<p class="section-label">학원 정보 (보고서 푸터)</p>', unsafe_allow_html=True)
@@ -1424,11 +1448,12 @@ def _df_to_questions(df: pd.DataFrame, prev_qs: list[Question]) -> list[Question
     return qs
 
 
-def render_main(api_key: str, theme: ThemeName = "editorial"):
+def render_main(api_key: str):
     if not api_key:
         st.error("OpenAI API Key 가 필요합니다.")
         return
     _init_state()
+    chart_theme: ThemeName = _ss("chart_theme", "editorial")
 
     # ── §1. 업로드 & OCR ──
     st.markdown('<div class="section-mark">§ 1. 업로드 & OCR</div>', unsafe_allow_html=True)
@@ -1585,17 +1610,17 @@ def render_main(api_key: str, theme: ThemeName = "editorial"):
 
                     status.update(label="차트 생성 중...")
                     charts = {
-                        "type":       chart_type_distribution(qs, theme),
-                        "scope":      chart_scope_distribution(qs, theme),
-                        "difficulty": chart_difficulty_distribution(qs, theme),
-                        "killer_map": chart_killer_map(qs, theme),
+                        "type":       chart_type_distribution(qs, chart_theme),
+                        "scope":      chart_scope_distribution(qs, chart_theme),
+                        "difficulty": chart_difficulty_distribution(qs, chart_theme),
+                        "killer_map": chart_killer_map(qs, chart_theme),
                     }
 
                     status.update(label="Word & 이미지 생성 중...")
                     word_b = build_word_report(meta, qs, body["gi"], body["seung"], body["gyeol"],
                                                body["captions"], kds, charts, academy, phone)
                     img_b = render_blog_image(meta, qs, body["gi"], body["seung"], body["gyeol"],
-                                              body["captions"], kds, charts, academy, phone, theme=theme)
+                                              body["captions"], kds, charts, academy, phone, theme=chart_theme)
                     text_b = build_blog_text(meta, qs, body["gi"], body["seung"], body["gyeol"],
                                              body["captions"], kds, academy, phone)
                     _set_ss("blog_word", word_b)
