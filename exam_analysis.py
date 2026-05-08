@@ -779,20 +779,25 @@ def _init_state():
 def render_sidebar():
     """시험 분석 모드의 사이드바. app.py 의 with st.sidebar: 안에서 호출."""
     _init_state()
+    # 과목은 영어 고정, 학교/학년은 OCR 이 추출 — 사이드바 입력 없음
+    st.session_state[SS_PREFIX + "subject_hint"] = "영어"
+    st.session_state[SS_PREFIX + "grade_hint"] = ""
+
     st.markdown("### 분석 설정")
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
-    st.markdown('<p class="section-label">OCR 힌트</p>', unsafe_allow_html=True)
-    st.selectbox(
-        "과목", ["영어", "수학", "국어", "기타"],
-        key=SS_PREFIX + "subject_hint",
-        help="과목을 알려주면 OCR 의 유형 분류 정확도가 높아집니다.",
-    )
-    st.text_input(
-        "학교/학년", key=SS_PREFIX + "grade_hint",
-        help="예: 고2, 중3, 고1",
+    st.markdown(
+        "<p class='section-label'>현재 설정</p>"
+        "<div style='font-size:13px;color:var(--text-body);line-height:1.7'>"
+        "과목 <span style='color:var(--text-muted)'>·</span> "
+        "<b>영어</b> <span class='tag tag-neutral' style='margin-left:4px'>고정</span><br/>"
+        "학교/학년 <span style='color:var(--text-muted)'>·</span> "
+        "<span style='color:var(--text-muted)'>OCR 자동 추출</span>"
+        "</div>",
+        unsafe_allow_html=True,
     )
 
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<p class="section-label">초기화</p>', unsafe_allow_html=True)
     if st.button("분석 결과 초기화", use_container_width=True):
         for k in ("meta", "questions", "killers", "summary", "uploaded_keys"):
@@ -833,8 +838,8 @@ def render_main(api_key: str):
         help="시험지 한 부 전체를 페이지별 이미지로 올리세요. PDF는 미리 이미지로 변환해 주세요.",
     )
 
-    subject_hint = _ss("subject_hint", "영어")
-    grade_hint = _ss("grade_hint", "고2")
+    subject_hint = "영어"      # 고정
+    grade_hint = ""             # OCR 이 추출
 
     if files:
         keys = [f"{f.name}_{f.size}" for f in files]
